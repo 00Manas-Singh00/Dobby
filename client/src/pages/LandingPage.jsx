@@ -29,10 +29,10 @@ const LandingPage = () => {
 
                     <div className="hidden md:flex space-x-10 text-xs font-bold uppercase tracking-[0.2em] text-slate-400">
                         <a href="#features" className="hover:text-white transition-colors">Features</a>
-                        <a href="https://github.com/Prthmsh7/Dobby" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors flex items-center gap-1">
+                        <a href="https://github.com/00Manas-Singh00/Dobby" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors flex items-center gap-1">
                             Docs <ExternalLink size={12} />
                         </a>
-                        <a href="https://github.com/Prthmsh7/Dobby" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Source</a>
+                        <a href="https://github.com/00Manas-Singh00/Dobby" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Source</a>
                     </div>
 
                     <button

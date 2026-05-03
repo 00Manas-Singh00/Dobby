@@ -10,6 +10,7 @@ export const DobbyLandingPage = () => {
     };
 
     return (
+        <>
         <div className="w-full bg-black selection:bg-white/10 selection:text-white">
             {/* Navigation (Transparent) */}
             <nav className="fixed top-0 left-0 w-full z-50 px-6 py-8 flex justify-between items-center bg-gradient-to-b from-black/50 to-transparent">
@@ -40,5 +41,6 @@ export const DobbyLandingPage = () => {
                 </div>
             </footer>
         </div>
-    );
+        </>
+            );
 };
