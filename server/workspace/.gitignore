@@ -1,0 +1,6 @@
+# Ignore all room workspace directories (user-created content)
+*/
+
+# But keep this README
+!README.md
+!.gitignore
