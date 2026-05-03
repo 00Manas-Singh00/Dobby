@@ -30,22 +30,22 @@ const WorkspaceHeader = ({ roomId, username, users = [], theme = 'vs-dark', onTh
     };
 
     return (
-        <header className="h-14 border-b border-slate-800 flex items-center px-6 justify-between bg-slate-900/95 backdrop-blur-sm relative z-20">
+        <header className="h-16 border-b-4 border-black flex items-center px-6 justify-between bg-white relative z-20 font-mono">
             {/* Left: Room Info */}
             <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2 glass-dark rounded-lg px-3 py-1.5">
-                    <span className="text-xs text-slate-400 font-medium">Room:</span>
-                    <code className="text-xs text-blue-300 font-mono">{roomId.slice(0, 8)}...</code>
+                <div className="flex items-center gap-2 bg-[#f8f9fa] border-4 border-black neo-shadow-sm px-4 py-2 rounded-none">
+                    <span className="text-sm text-black font-black uppercase tracking-widest">Room:</span>
+                    <code className="text-sm text-black font-bold bg-[#FFEB3B] px-2 py-1 border-2 border-black">{roomId.slice(0, 8)}...</code>
                     <Button
                         variant="ghost"
                         size="icon"
-                        className="h-6 w-6 hover:bg-white/10"
+                        className="h-8 w-8 hover:bg-[#00E5FF] border-2 border-transparent hover:border-black rounded-none transition-none ml-2"
                         onClick={copyRoomId}
                     >
                         {copied ? (
-                            <Check size={14} className="text-green-400" />
+                            <Check size={18} className="text-black stroke-[3]" />
                         ) : (
-                            <Copy size={14} className="text-slate-400" />
+                            <Copy size={18} className="text-black stroke-[3]" />
                         )}
                     </Button>
                 </div>
@@ -57,12 +57,12 @@ const WorkspaceHeader = ({ roomId, username, users = [], theme = 'vs-dark', onTh
                 <div className="relative">
                     <button
                         onClick={() => setShowUsers(!showUsers)}
-                        className="flex items-center gap-2 glass-dark rounded-lg px-3 py-1.5 hover:bg-slate-800/50 transition-colors"
+                        className="flex items-center gap-2 bg-[#f8f9fa] border-4 border-black neo-shadow-sm hover:neo-shadow-hover px-4 py-2 rounded-none transition-none"
                     >
-                        <Users size={16} className="text-slate-400" />
-                        <span className="text-sm text-slate-300">{users.length}</span>
-                        <ChevronDown size={14} className={cn(
-                            "text-slate-400 transition-transform",
+                        <Users size={20} className="text-black stroke-[3]" />
+                        <span className="text-base font-black text-black">{users.length}</span>
+                        <ChevronDown size={18} className={cn(
+                            "text-black stroke-[3] transition-transform",
                             showUsers && "rotate-180"
                         )} />
                     </button>
@@ -73,9 +73,9 @@ const WorkspaceHeader = ({ roomId, username, users = [], theme = 'vs-dark', onTh
                                 className="fixed inset-0 z-10"
                                 onClick={() => setShowUsers(false)}
                             />
-                            <div className="absolute right-0 top-full mt-2 w-64 bg-slate-800 border border-slate-700 rounded-lg shadow-2xl z-20 py-2">
-                                <div className="px-3 py-2 border-b border-slate-700">
-                                    <p className="text-xs text-slate-400 uppercase tracking-wider font-medium">
+                            <div className="absolute right-0 top-full mt-2 w-64 bg-white border-4 border-black neo-shadow z-20 py-0 rounded-none">
+                                <div className="px-4 py-3 border-b-4 border-black bg-[#00E5FF]">
+                                    <p className="text-sm text-black font-black uppercase tracking-wider">
                                         Active Users ({users.length})
                                     </p>
                                 </div>
@@ -83,12 +83,12 @@ const WorkspaceHeader = ({ roomId, username, users = [], theme = 'vs-dark', onTh
                                     {users.map((user, index) => (
                                         <div
                                             key={index}
-                                            className="px-3 py-2 hover:bg-slate-700/50 flex items-center gap-2"
+                                            className="px-4 py-3 hover:bg-[#FFEB3B] border-b border-black last:border-b-0 flex items-center gap-3 transition-none"
                                         >
-                                            <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                                            <span className="text-sm text-slate-200">{user}</span>
+                                            <div className="w-3 h-3 border-2 border-black bg-green-400 animate-pulse" />
+                                            <span className="text-base font-bold text-black">{user}</span>
                                             {user === username && (
-                                                <span className="ml-auto text-xs text-blue-400">(You)</span>
+                                                <span className="ml-auto text-xs font-black text-black uppercase">(You)</span>
                                             )}
                                         </div>
                                     ))}
@@ -100,15 +100,15 @@ const WorkspaceHeader = ({ roomId, username, users = [], theme = 'vs-dark', onTh
 
                 {/* Theme Selector */}
                 <Select value={theme} onValueChange={onThemeChange}>
-                    <SelectTrigger className="w-[130px] bg-slate-800 border-slate-700 text-white h-8 hover:bg-slate-700 transition-colors">
+                    <SelectTrigger className="w-[140px] bg-white border-4 border-black neo-shadow-sm text-black h-10 hover:bg-[#FFEB3B] transition-none rounded-none font-bold uppercase tracking-widest text-xs focus:ring-0 focus:ring-offset-0">
                         <div className="flex items-center gap-2">
-                            <Palette size={14} />
+                            <Palette size={16} className="stroke-[3]" />
                             <SelectValue placeholder="Theme" />
                         </div>
                     </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-700 text-white">
+                    <SelectContent className="bg-white border-4 border-black text-black rounded-none">
                         {themes.map((t) => (
-                            <SelectItem key={t.value} value={t.value}>
+                            <SelectItem key={t.value} value={t.value} className="hover:bg-[#00E5FF] font-bold text-sm rounded-none focus:bg-[#00E5FF] focus:text-black">
                                 {t.label}
                             </SelectItem>
                         ))}
@@ -116,18 +116,18 @@ const WorkspaceHeader = ({ roomId, username, users = [], theme = 'vs-dark', onTh
                 </Select>
 
                 {/* Current User */}
-                <div className="flex items-center gap-2 glass-dark rounded-lg px-3 py-1.5">
-                    <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                    <span className="text-sm text-slate-300 font-medium">{username}</span>
+                <div className="flex items-center gap-3 bg-[#f8f9fa] border-4 border-black neo-shadow-sm px-4 py-2 rounded-none">
+                    <div className="w-3 h-3 border-2 border-black bg-green-400 animate-pulse" />
+                    <span className="text-base text-black font-black uppercase tracking-widest">{username}</span>
                 </div>
 
                 {/* Leave Button */}
                 <Button
                     onClick={handleLeave}
                     variant="ghost"
-                    className="text-red-400 hover:text-red-300 hover:bg-red-500/10 gap-2"
+                    className="text-black font-black uppercase tracking-widest border-4 border-black bg-[#FF4081] hover:bg-[#F50057] hover:text-black neo-shadow-hover rounded-none h-10 px-6 gap-2 transition-none"
                 >
-                    <LogOut size={16} />
+                    <LogOut size={18} className="stroke-[3]" />
                     Leave
                 </Button>
             </div>

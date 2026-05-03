@@ -44,85 +44,71 @@ export const NewHero = ({ onLaunch }) => {
     const chars = title.split("");
 
     return (
-        <section ref={containerRef} className="relative min-h-screen flex flex-col items-center justify-center pt-20 px-6 overflow-hidden bg-black text-white">
-            {/* Background Gradients */}
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full pointer-events-none overflow-hidden">
-                <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/10 blur-[120px] rounded-full animate-pulse" />
-                <div className="absolute bottom-[10%] right-[-10%] w-[40%] h-[40%] bg-purple-600/10 blur-[120px] rounded-full" />
-            </div>
+        <section ref={containerRef} className="relative min-h-screen flex flex-col items-center justify-center pt-20 px-6 overflow-hidden bg-white text-black border-b-4 border-black">
+            {/* Background pattern (Brutalist grid) */}
+            <div className="absolute inset-0 pointer-events-none opacity-[0.05]" style={{ backgroundImage: 'linear-gradient(#000 1px, transparent 1px), linear-gradient(90deg, #000 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
 
             <div className="max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-2 gap-12 items-center relative z-10">
                 {/* Left Content */}
                 <div className="flex flex-col items-start space-y-8">
-                    <motion.div 
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-blue-400 text-xs font-semibold tracking-wider uppercase"
-                    >
-                        <Zap size={14} className="fill-current" />
-                        <span>v2.0 Now Live</span>
-                    </motion.div>
+                    
 
-                    <h1 ref={titleRef} className="text-6xl md:text-8xl font-black tracking-tight leading-[0.9] flex flex-wrap">
+                    <h1 ref={titleRef} className="text-6xl md:text-8xl font-black tracking-tight leading-[0.9] flex flex-wrap uppercase">
                         {chars.map((char, i) => (
-                            <span key={i} className="char inline-block min-w-[0.2em]">
+                            <span key={i} className="char inline-block min-w-[0.2em] hover:text-[#FF4081] transition-colors cursor-default">
                                 {char === " " ? "\u00A0" : char}
                             </span>
                         ))}
                     </h1>
 
-                    <p ref={subtitleRef} className="text-lg md:text-xl text-slate-400 max-w-xl leading-relaxed">
+                    <p ref={subtitleRef} className="text-lg md:text-xl text-black font-semibold max-w-xl leading-relaxed border-l-4 border-black pl-4">
                         Experience the world's most advanced collaborative coding environment. 
                         AI-powered assistance, real-time sync, and sandboxed execution—all in one place.
                     </p>
 
-                    <div ref={ctaRef} className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+                    <div ref={ctaRef} className="flex flex-col sm:flex-row items-center gap-6 w-full sm:w-auto mt-4">
                         <button 
                             onClick={onLaunch}
-                            className="group relative px-8 py-4 bg-white text-black font-bold rounded-xl transition-all hover:scale-105 active:scale-95 w-full sm:w-auto overflow-hidden"
+                            className="group relative px-8 py-4 bg-[#FFEB3B] text-black font-black border-4 border-black neo-shadow-hover w-full sm:w-auto overflow-hidden uppercase tracking-wider"
                         >
-                            <span className="relative z-10 flex items-center gap-2">
+                            <span className="relative z-10 flex items-center justify-center gap-2">
                                 Launch Codespace <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
                             </span>
-                            <div className="absolute inset-0 bg-gradient-to-r from-blue-400 via-white to-purple-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                         </button>
                         
                         <a 
                             href="https://github.com/Prthmsh7/Dobby" 
                             target="_blank" 
                             rel="noopener noreferrer"
-                            className="px-8 py-4 bg-white/5 hover:bg-white/10 text-white font-semibold rounded-xl border border-white/10 transition-all w-full sm:w-auto text-center"
+                            className="px-8 py-4 bg-white hover:bg-slate-100 text-black font-black border-4 border-black neo-shadow-hover w-full sm:w-auto text-center uppercase tracking-wider"
                         >
                             View Source
                         </a>
                     </div>
 
-                    <div className="flex items-center gap-8 pt-8">
+                    <div className="flex items-center gap-8 pt-8 font-mono">
                         <div className="flex flex-col">
-                            <span className="text-2xl font-bold">14+</span>
-                            <span className="text-xs text-slate-500 uppercase tracking-widest">Languages</span>
+                            <span className="text-3xl font-black">14+</span>
+                            <span className="text-xs text-black font-bold uppercase tracking-widest border-t-4 border-black pt-1">Languages</span>
                         </div>
-                        <div className="w-[1px] h-8 bg-white/10" />
                         <div className="flex flex-col">
-                            <span className="text-2xl font-bold">5ms</span>
-                            <span className="text-xs text-slate-500 uppercase tracking-widest">Latency</span>
+                            <span className="text-3xl font-black">5ms</span>
+                            <span className="text-xs text-black font-bold uppercase tracking-widest border-t-4 border-black pt-1">Latency</span>
                         </div>
-                        <div className="w-[1px] h-8 bg-white/10" />
                         <div className="flex flex-col">
-                            <span className="text-2xl font-bold">100%</span>
-                            <span className="text-xs text-slate-500 uppercase tracking-widest">Sandboxed</span>
+                            <span className="text-3xl font-black">100%</span>
+                            <span className="text-xs text-black font-bold uppercase tracking-widest border-t-4 border-black pt-1">Sandboxed</span>
                         </div>
                     </div>
                 </div>
 
                 {/* Right Visual */}
-                <div ref={lottieRef} className="relative aspect-square w-full max-w-xl mx-auto lg:mr-0">
-                    <div className="absolute inset-0 bg-blue-500/20 blur-[100px] rounded-full" />
+                <div ref={lottieRef} className="relative aspect-square w-full max-w-xl mx-auto lg:mr-0 border-4 border-black neo-shadow bg-[#FFEB3B] p-4">
                     <Lottie 
                         animationData={null} // We'll load via path
                         path={LOTTIE_URL}
                         loop={true}
-                        className="w-full h-full relative z-10"
+                        className="w-full h-full relative z-10 mix-blend-multiply"
                     />
                 </div>
             </div>
@@ -131,10 +117,10 @@ export const NewHero = ({ onLaunch }) => {
             <motion.div 
                 animate={{ y: [0, 10, 0] }}
                 transition={{ duration: 2, repeat: Infinity }}
-                className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-slate-500"
+                className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-black font-black"
             >
-                <span className="text-[10px] uppercase tracking-[0.3em] font-medium">Scroll to explore</span>
-                <div className="w-[1px] h-12 bg-gradient-to-b from-slate-500/50 to-transparent" />
+                <span className="text-[10px] uppercase tracking-[0.3em]">Scroll</span>
+                <div className="w-[4px] h-12 bg-black" />
             </motion.div>
         </section>
     );

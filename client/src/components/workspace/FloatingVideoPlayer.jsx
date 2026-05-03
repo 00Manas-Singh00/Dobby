@@ -65,7 +65,7 @@ const FloatingVideoPlayer = ({ onExpand, socket, roomId, username }) => {
         <div
             ref={playerRef}
             className={cn(
-                "fixed z-50 bg-slate-900 rounded-lg shadow-2xl border-2 border-slate-700 overflow-hidden group",
+                "fixed z-50 bg-[#FFEB3B] rounded-none border-4 border-black neo-shadow overflow-hidden group font-mono",
                 isDragging ? "cursor-grabbing" : "cursor-grab"
             )}
             style={{
@@ -77,62 +77,62 @@ const FloatingVideoPlayer = ({ onExpand, socket, roomId, username }) => {
             onMouseDown={handleMouseDown}
         >
             {/* Video Content - Placeholder for now */}
-            <div className="w-full h-full bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center">
+            <div className="w-full h-full bg-white flex items-center justify-center">
                 <div className="text-center">
-                    <Video size={32} className="text-slate-600 mx-auto mb-2" />
-                    <p className="text-xs text-slate-500">Video Call Active</p>
+                    <Video size={36} className="text-black stroke-[3] mx-auto mb-2" />
+                    <p className="text-xs font-black text-black uppercase tracking-widest">Video Call</p>
                 </div>
             </div>
 
             {/* Controls Overlay */}
-            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="absolute bottom-0 left-0 right-0 bg-white border-t-4 border-black p-2 opacity-0 group-hover:opacity-100 transition-none flex justify-center items-center gap-2">
                 <div className="flex items-center justify-center gap-1">
                     <Button
                         size="icon"
                         variant="ghost"
                         className={cn(
-                            "control-button h-7 w-7 hover:bg-white/10",
-                            isMuted && "bg-red-500/20 text-red-400"
+                            "control-button h-8 w-8 hover:bg-[#FFEB3B] border-2 border-transparent hover:border-black rounded-none transition-none",
+                            isMuted && "bg-[#FF4081] text-black hover:bg-[#F50057]"
                         )}
                         onClick={(e) => {
                             e.stopPropagation();
                             toggleVideoMute();
                         }}
                     >
-                        {isMuted ? <MicOff size={14} /> : <Mic size={14} />}
+                        {isMuted ? <MicOff size={16} className="stroke-[3] text-black" /> : <Mic size={16} className="stroke-[3] text-black" />}
                     </Button>
 
                     <Button
                         size="icon"
                         variant="ghost"
                         className={cn(
-                            "control-button h-7 w-7 hover:bg-white/10",
-                            isVideoOff && "bg-red-500/20 text-red-400"
+                            "control-button h-8 w-8 hover:bg-[#FFEB3B] border-2 border-transparent hover:border-black rounded-none transition-none",
+                            isVideoOff && "bg-[#FF4081] text-black hover:bg-[#F50057]"
                         )}
                         onClick={(e) => {
                             e.stopPropagation();
                             toggleVideoCamera();
                         }}
                     >
-                        {isVideoOff ? <VideoOff size={14} /> : <Video size={14} />}
+                        {isVideoOff ? <VideoOff size={16} className="stroke-[3] text-black" /> : <Video size={16} className="stroke-[3] text-black" />}
                     </Button>
 
                     <Button
                         size="icon"
                         variant="ghost"
-                        className="control-button h-7 w-7 hover:bg-white/10"
+                        className="control-button h-8 w-8 hover:bg-[#00E5FF] border-2 border-transparent hover:border-black rounded-none transition-none"
                         onClick={(e) => {
                             e.stopPropagation();
                             onExpand();
                         }}
                     >
-                        <Maximize2 size={14} />
+                        <Maximize2 size={16} className="stroke-[3] text-black" />
                     </Button>
                 </div>
             </div>
 
             {/* Resize Handle (corner) - simplified for now */}
-            <div className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize bg-blue-500/50 opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize bg-[#00E5FF] opacity-0 group-hover:opacity-100 transition-none border-t-2 border-l-2 border-black" />
         </div>
     );
 };

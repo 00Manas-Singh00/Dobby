@@ -61,7 +61,7 @@ export default {
                 "accordion-up": "accordion-up 0.2s ease-out",
             },
             fontFamily: {
-                sans: ['"JetBrains Mono"', 'monospace'],
+                sans: ['"Space Grotesk"', 'sans-serif'],
                 mono: ['"JetBrains Mono"', 'monospace'],
             },
         },

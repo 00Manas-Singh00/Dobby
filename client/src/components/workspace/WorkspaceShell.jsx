@@ -11,9 +11,6 @@ import VideoWorkspace from './VideoWorkspace';
 import WhiteboardWorkspace from './WhiteboardWorkspace';
 import ChatWorkspace from './ChatWorkspace';
 import FloatingVideoPlayer from './FloatingVideoPlayer';
-import AIPanel from './AIPanel';
-import AIWorkspace from './AIWorkspace';
-
 const WorkspaceShellContent = () => {
     const { roomId } = useParams();
     const location = useLocation();
@@ -76,7 +73,7 @@ const WorkspaceShellContent = () => {
     const showFloatingVideo = videoState.streamActive && activeModule !== 'video';
 
     return (
-        <div className="h-screen w-screen flex flex-col bg-slate-950 overflow-hidden">
+        <div className="h-screen w-screen flex flex-col bg-white overflow-hidden text-black font-mono">
             {/* Header */}
             <WorkspaceHeader
                 roomId={roomId}
@@ -124,9 +121,7 @@ const WorkspaceShellContent = () => {
                         roomId={roomId}
                         username={username}
                     />
-                    {/* AI Workspace — standalone full-page AI panel */}
-                    <AIWorkspace moduleId="ai" />
-                </WorkspaceContainer>
+                    </WorkspaceContainer>
 
                 {/* Floating Video Player (when video is not active module) */}
                 {showFloatingVideo && (

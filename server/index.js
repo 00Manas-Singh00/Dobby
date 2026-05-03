@@ -9,7 +9,6 @@ const { v4: uuidv4 } = require('uuid');
 // Internal services & routes
 const terminalManager = require('./terminalManager');
 const executionRouter = require('./routes/execution');
-const aiRouter = require('./routes/ai');
 const { setupYjs } = require('./services/yjsService');
 
 const app = express();
@@ -20,7 +19,6 @@ app.use(express.json({ limit: '500kb' }));
 
 // ─── REST API Routes ───────────────────────────────────────────────────────────
 app.use('/api', executionRouter);
-app.use('/api', aiRouter);
 
 // Health check
 app.get('/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));

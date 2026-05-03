@@ -27,28 +27,28 @@ const TerminalComponent = () => {
         const term = new Terminal({
             cursorBlink: true,
             fontSize: 14,
-            fontFamily: 'JetBrains Mono, Menlo, Monaco, Courier New, monospace',
+            fontFamily: 'Space Grotesk, JetBrains Mono, monospace',
             theme: {
-                background: '#0a0e14',
-                foreground: '#b3b1ad',
-                cursor: '#00ff00',
-                cursorAccent: '#000000',
-                selection: '#4f5b66',
+                background: '#ffffff',
+                foreground: '#000000',
+                cursor: '#FF4081',
+                cursorAccent: '#ffffff',
+                selection: '#00E5FF',
                 black: '#000000',
-                red: '#ff3333',
-                green: '#b8cc52',
-                yellow: '#e7c547',
-                blue: '#36a3d9',
-                magenta: '#f07178',
-                cyan: '#95e6cb',
+                red: '#FF4081',
+                green: '#00E5FF',
+                yellow: '#FFEB3B',
+                blue: '#FF4081',
+                magenta: '#FF4081',
+                cyan: '#00E5FF',
                 white: '#ffffff',
                 brightBlack: '#676e7a',
-                brightRed: '#ff6565',
-                brightGreen: '#dfed93',
-                brightYellow: '#fff68f',
-                brightBlue: '#68d5ff',
-                brightMagenta: '#ffb7b7',
-                brightCyan: '#c7fffd',
+                brightRed: '#FF4081',
+                brightGreen: '#00E5FF',
+                brightYellow: '#FFEB3B',
+                brightBlue: '#FF4081',
+                brightMagenta: '#FF4081',
+                brightCyan: '#00E5FF',
                 brightWhite: '#ffffff',
             },
             scrollback: 1000,
@@ -101,7 +101,7 @@ const TerminalComponent = () => {
 
         const handleReady = ({ message }) => {
             if (xtermRef.current) {
-                xtermRef.current.writeln('\x1b[1;32mTerminal ready. Type your commands here.\x1b[0m');
+                xtermRef.current.writeln('\x1b[1;36mTerminal ready. Type your commands here.\x1b[0m');
             }
         };
 
@@ -204,14 +204,14 @@ const TerminalComponent = () => {
     if (terminalCollapsed) {
         return (
             <div
-                className="h-10 bg-slate-900 border-t border-slate-800 flex items-center px-4 justify-between cursor-pointer hover:bg-slate-850"
+                className="h-10 bg-white border-t-4 border-black flex items-center px-4 justify-between cursor-pointer hover:bg-[#00E5FF] font-mono transition-none"
                 onClick={toggleTerminal}
             >
                 <div className="flex items-center gap-2">
-                    <TerminalIcon size={16} className="text-slate-400" />
-                    <span className="text-sm text-slate-400">Terminal</span>
+                    <TerminalIcon size={18} className="text-black stroke-[3]" />
+                    <span className="text-sm text-black font-black uppercase tracking-widest">Terminal</span>
                 </div>
-                <ChevronUp size={16} className="text-slate-400" />
+                <ChevronUp size={18} className="text-black stroke-[3]" />
             </div>
         );
     }
@@ -219,33 +219,33 @@ const TerminalComponent = () => {
     return (
         <div
             ref={containerRef}
-            className="bg-slate-950 border-t border-slate-800 flex flex-col select-none relative z-10"
+            className="bg-white border-t-4 border-black flex flex-col select-none relative z-10 font-mono"
             style={{ height: `${terminalHeight}px`, minHeight: '100px' }}
         >
             {/* Resize Handle */}
             <div
                 className={cn(
-                    "h-1 cursor-ns-resize hover:bg-blue-500/50 transition-colors group relative",
-                    isResizing && "bg-blue-500"
+                    "h-2 cursor-ns-resize hover:bg-[#FF4081] transition-none group relative border-b-4 border-transparent hover:border-black",
+                    isResizing && "bg-[#FF4081] border-black"
                 )}
                 onMouseDown={handleMouseDown}
             >
-                <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 w-12 h-1 bg-slate-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 w-12 h-1 bg-black opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
 
             {/* Header */}
-            <div className="h-10 flex items-center justify-between px-4 border-b border-slate-800">
+            <div className="h-10 flex items-center justify-between px-4 border-b-4 border-black bg-[#FFEB3B]">
                 <div className="flex items-center gap-2">
-                    <TerminalIcon size={16} className="text-green-400" />
-                    <span className="text-sm text-slate-300 font-medium">Terminal</span>
+                    <TerminalIcon size={18} className="text-black stroke-[3]" />
+                    <span className="text-sm text-black font-black uppercase tracking-widest">Terminal</span>
                 </div>
                 <div className="flex items-center gap-1">
                     <button
-                        className="p-1 hover:bg-slate-800 rounded transition-colors"
+                        className="p-1 hover:bg-[#FF4081] border-2 border-transparent hover:border-black rounded-none transition-none"
                         onClick={toggleTerminal}
                         title="Minimize terminal"
                     >
-                        <ChevronDown size={16} className="text-slate-400" />
+                        <ChevronDown size={18} className="text-black stroke-[3]" />
                     </button>
                 </div>
             </div>
