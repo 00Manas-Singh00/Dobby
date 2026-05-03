@@ -59,24 +59,24 @@ const FileTreeNode = ({ node, path, depth = 0, expandedFolders, onToggleFolder, 
         <>
             <div
                 className={cn(
-                    "flex items-center gap-2 py-1 px-2 hover:bg-slate-800/50 cursor-pointer rounded text-sm",
-                    isActive && "bg-blue-500/20 text-blue-300"
+                    "flex items-center gap-2 py-2 px-2 hover:bg-[#FFEB3B] border-2 border-transparent hover:border-black cursor-pointer rounded-none text-sm font-bold text-black uppercase transition-none",
+                    isActive && "bg-[#00E5FF] border-black neo-shadow-sm text-black"
                 )}
                 style={{ paddingLeft: `${depth * 12 + 8}px` }}
                 onClick={handleClick}
             >
                 {isFolder && (
-                    <span className="text-slate-500">
-                        {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    <span className="text-black">
+                        {isExpanded ? <ChevronDown size={16} className="stroke-[3]" /> : <ChevronRight size={16} className="stroke-[3]" />}
                     </span>
                 )}
-                <Icon size={16} className={cn(
-                    isFolder ? "text-blue-400" : "text-slate-400",
-                    isActive && "text-blue-300"
+                <Icon size={18} className={cn(
+                    isFolder ? "text-black stroke-[2]" : "text-black stroke-[2]",
+                    isActive && "text-black"
                 )} />
                 <span className={cn(
                     "flex-1 truncate",
-                    isActive ? "text-blue-200 font-medium" : "text-slate-300"
+                    isActive ? "text-black font-black" : "text-black"
                 )}>
                     {node.name}
                 </span>
@@ -117,10 +117,10 @@ const FileExplorer = () => {
     };
 
     return (
-        <div className="h-full bg-slate-900 flex flex-col">
+        <div className="h-full bg-white flex flex-col font-mono border-r-4 border-black">
             {/* Header */}
-            <div className="h-10 flex items-center px-3 border-b border-slate-800">
-                <span className="text-xs text-slate-400 uppercase tracking-wider font-medium">
+            <div className="h-10 flex items-center px-4 border-b-4 border-black bg-[#FFEB3B]">
+                <span className="text-sm text-black uppercase tracking-widest font-black">
                     Explorer</span>
             </div>
 

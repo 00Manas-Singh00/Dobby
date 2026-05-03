@@ -42,12 +42,12 @@ const ExecutionPanel = ({ isRunning, result, error, onClear, stdin, onStdinChang
     const exitSuccess = result?.exitCode === 0;
 
     return (
-        <div className="border-t border-slate-700 bg-slate-950 flex flex-col animate-in slide-in-from-bottom-2 duration-200">
+        <div className="border-t-4 border-black bg-white flex flex-col animate-in slide-in-from-bottom-2 duration-200 font-mono z-20">
             {/* Header */}
-            <div className="h-9 flex items-center justify-between px-4 border-b border-slate-800 flex-shrink-0">
+            <div className="h-10 flex items-center justify-between px-4 border-b-4 border-black flex-shrink-0 bg-[#FFEB3B]">
                 <div className="flex items-center gap-2">
-                    <Terminal size={14} className="text-slate-400" />
-                    <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    <Terminal size={16} className="text-black stroke-[3]" />
+                    <span className="text-sm font-black text-black uppercase tracking-widest">
                         Output
                     </span>
                     {result && (
@@ -55,10 +55,10 @@ const ExecutionPanel = ({ isRunning, result, error, onClear, stdin, onStdinChang
                             {/* Exit code badge */}
                             <span
                                 className={cn(
-                                    'flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium',
+                                    'flex items-center gap-1 text-xs px-2 py-1 border-2 border-black font-black uppercase',
                                     exitSuccess
-                                        ? 'bg-green-500/15 text-green-400'
-                                        : 'bg-red-500/15 text-red-400'
+                                        ? 'bg-[#00E5FF] text-black'
+                                        : 'bg-[#FF4081] text-black'
                                 )}
                             >
                                 {exitSuccess ? (
@@ -69,12 +69,12 @@ const ExecutionPanel = ({ isRunning, result, error, onClear, stdin, onStdinChang
                                 exit {result.exitCode}
                             </span>
                             {/* Timing */}
-                            <span className="flex items-center gap-1 text-xs text-slate-500">
-                                <Clock size={10} />
+                            <span className="flex items-center gap-1 text-xs text-black font-bold">
+                                <Clock size={12} className="stroke-[3]" />
                                 {result.time}ms
                             </span>
                             {/* Runtime */}
-                            <span className="text-xs text-slate-600">
+                            <span className="text-xs text-black font-bold">
                                 {result.language} {result.version}
                             </span>
                         </>
@@ -83,10 +83,10 @@ const ExecutionPanel = ({ isRunning, result, error, onClear, stdin, onStdinChang
 
                 <button
                     onClick={onClear}
-                    className="p-1 hover:bg-slate-800 rounded transition-colors text-slate-500 hover:text-slate-300"
+                    className="p-1 hover:bg-[#FF4081] rounded-none border-2 border-transparent hover:border-black transition-none text-black"
                     title="Clear output"
                 >
-                    <X size={14} />
+                    <X size={18} className="stroke-[3]" />
                 </button>
             </div>
 
@@ -94,17 +94,17 @@ const ExecutionPanel = ({ isRunning, result, error, onClear, stdin, onStdinChang
             <div ref={outputRef} className="flex-1 overflow-y-auto max-h-56 p-3 space-y-2">
                 {/* Running spinner */}
                 {isRunning && (
-                    <div className="flex items-center gap-2 text-blue-400">
-                        <Loader2 size={14} className="animate-spin" />
-                        <span className="text-xs font-mono">Running...</span>
+                    <div className="flex items-center gap-2 text-black font-bold">
+                        <Loader2 size={16} className="animate-spin stroke-[3]" />
+                        <span className="text-sm font-mono uppercase tracking-widest">Running...</span>
                     </div>
                 )}
 
                 {/* Client/network error */}
                 {error && (
-                    <div className="flex items-start gap-2 text-red-400 bg-red-500/10 rounded p-2">
-                        <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
-                        <span className="text-xs font-mono">{error}</span>
+                    <div className="flex items-start gap-2 text-black bg-[#FF4081] border-4 border-black p-3 font-bold">
+                        <AlertTriangle size={18} className="mt-0.5 flex-shrink-0 stroke-[3]" />
+                        <span className="text-sm font-mono">{error}</span>
                     </div>
                 )}
 
@@ -113,10 +113,10 @@ const ExecutionPanel = ({ isRunning, result, error, onClear, stdin, onStdinChang
                         {/* Compile output (C, C++, Java, Rust) */}
                         {result.compileOutput && (
                             <div className="space-y-1">
-                                <p className="text-[10px] text-slate-500 uppercase tracking-wider">
+                                <p className="text-xs font-black text-black uppercase tracking-wider">
                                     Compiler
                                 </p>
-                                <pre className="text-xs font-mono text-yellow-300 bg-yellow-500/5 rounded p-2 whitespace-pre-wrap break-words">
+                                <pre className="text-sm font-mono text-black bg-[#FFEB3B] border-4 border-black p-3 whitespace-pre-wrap break-words font-bold">
                                     {result.compileOutput}
                                 </pre>
                             </div>
@@ -125,10 +125,10 @@ const ExecutionPanel = ({ isRunning, result, error, onClear, stdin, onStdinChang
                         {/* Stdout */}
                         {result.stdout && (
                             <div className="space-y-1">
-                                <p className="text-[10px] text-slate-500 uppercase tracking-wider">
+                                <p className="text-xs font-black text-black uppercase tracking-wider">
                                     stdout
                                 </p>
-                                <pre className="text-xs font-mono text-green-300 whitespace-pre-wrap break-words leading-5">
+                                <pre className="text-sm font-mono text-black bg-[#f8f9fa] border-4 border-black p-3 whitespace-pre-wrap break-words leading-5 font-bold">
                                     {result.stdout}
                                 </pre>
                             </div>
@@ -137,10 +137,10 @@ const ExecutionPanel = ({ isRunning, result, error, onClear, stdin, onStdinChang
                         {/* Stderr */}
                         {result.stderr && (
                             <div className="space-y-1">
-                                <p className="text-[10px] text-slate-500 uppercase tracking-wider">
+                                <p className="text-xs font-black text-black uppercase tracking-wider">
                                     stderr
                                 </p>
-                                <pre className="text-xs font-mono text-red-400 whitespace-pre-wrap break-words leading-5">
+                                <pre className="text-sm font-mono text-black bg-[#FF4081] border-4 border-black p-3 whitespace-pre-wrap break-words leading-5 font-bold">
                                     {result.stderr}
                                 </pre>
                             </div>
@@ -148,7 +148,7 @@ const ExecutionPanel = ({ isRunning, result, error, onClear, stdin, onStdinChang
 
                         {/* Empty output */}
                         {!result.stdout && !result.stderr && !result.compileOutput && (
-                            <p className="text-xs text-slate-500 italic font-mono">
+                            <p className="text-sm text-black font-black font-mono uppercase tracking-widest">
                                 (no output)
                             </p>
                         )}
@@ -157,8 +157,8 @@ const ExecutionPanel = ({ isRunning, result, error, onClear, stdin, onStdinChang
             </div>
 
             {/* Stdin input */}
-            <div className="border-t border-slate-800 px-3 py-2 flex items-center gap-2 flex-shrink-0">
-                <span className="text-[10px] text-slate-500 uppercase tracking-wider font-medium w-8 flex-shrink-0">
+            <div className="border-t-4 border-black px-4 py-3 flex items-center gap-3 flex-shrink-0 bg-white">
+                <span className="text-sm text-black uppercase tracking-widest font-black w-12 flex-shrink-0">
                     stdin
                 </span>
                 <input
@@ -166,7 +166,7 @@ const ExecutionPanel = ({ isRunning, result, error, onClear, stdin, onStdinChang
                     value={stdin}
                     onChange={(e) => onStdinChange(e.target.value)}
                     placeholder="Input for your program (optional)"
-                    className="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs font-mono text-slate-300 placeholder-slate-600 focus:outline-none focus:border-blue-500 transition-colors"
+                    className="flex-1 bg-white border-4 border-black rounded-none px-3 py-2 text-sm font-mono text-black font-bold placeholder-gray-500 focus:outline-none focus:ring-0 focus:bg-[#FFEB3B] transition-none neo-shadow-sm"
                 />
             </div>
         </div>

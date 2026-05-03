@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 
 const WorkspaceContainer = ({ activeModule, children }) => {
     return (
-        <div className="flex-1 relative overflow-hidden bg-slate-950">
+        <div className="flex-1 relative overflow-hidden bg-[#f8f9fa]">
             {React.Children.map(children, (child) => {
                 if (!child) return null;
 

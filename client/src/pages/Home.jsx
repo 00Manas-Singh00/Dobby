@@ -116,108 +116,103 @@ const Home = () => {
     ];
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 text-white flex items-center justify-center p-4">
-            {/* Animated background elements */}
-            <div className="fixed inset-0 overflow-hidden pointer-events-none">
-                <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-float" />
-                <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-float" style={{ animationDelay: '1s' }} />
-            </div>
+        <div className="min-h-screen bg-[#f8f9fa] text-black flex items-center justify-center p-4 relative" style={{ backgroundImage: 'radial-gradient(#000 2px, transparent 2px)', backgroundSize: '32px 32px' }}>
 
-            <div className="relative z-10 w-full max-w-2xl">
+            <div className="relative z-10 w-full max-w-2xl mt-12">
                 {/* Main Action Card */}
                 <div className="animate-scale-in">
-                    <Card className="border-white/10 bg-white/5 backdrop-blur-2xl shadow-2xl overflow-hidden">
+                    <Card className="border-4 border-black bg-white neo-shadow overflow-hidden rounded-none">
                         <Tabs defaultValue="join" className="w-full">
-                            <TabsList className="grid w-full grid-cols-2 bg-white/5 p-1 rounded-none">
-                                <TabsTrigger value="join" className="data-[state=active]:bg-blue-600/80 data-[state=active]:text-white transition-all duration-300">
+                            <TabsList className="grid w-full grid-cols-2 bg-white border-b-4 border-black p-0 rounded-none h-14">
+                                <TabsTrigger value="join" className="data-[state=active]:bg-[#00E5FF] data-[state=active]:text-black text-black font-black uppercase tracking-widest border-r-4 border-transparent data-[state=active]:border-black rounded-none h-full transition-none">
                                     Join Room
                                 </TabsTrigger>
-                                <TabsTrigger value="create" className="data-[state=active]:bg-purple-600/80 data-[state=active]:text-white transition-all duration-300">
+                                <TabsTrigger value="create" className="data-[state=active]:bg-[#FFEB3B] data-[state=active]:text-black text-black font-black uppercase tracking-widest rounded-none h-full transition-none">
                                     Create Room
                                 </TabsTrigger>
                             </TabsList>
 
                             <TabsContent value="join" className="p-6">
-                                <CardHeader className="px-0 pt-0 pb-6">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <Users className="text-blue-400" size={24} />
-                                        <CardTitle className="text-2xl font-bold tracking-tight">Join a Room</CardTitle>
+                                <CardHeader className="px-0 pt-0 pb-6 border-b-4 border-black mb-6">
+                                    <div className="flex items-center gap-2 mb-2 p-6 pb-0">
+                                        <Users className="text-black stroke-[3]" size={28} />
+                                        <CardTitle className="text-3xl font-black tracking-tight text-black uppercase">Join a Room</CardTitle>
                                     </div>
-                                    <CardDescription className="text-slate-400 text-base">
+                                    <CardDescription className="text-black font-bold text-base px-6">
                                         Enter the Room ID shared by your team to start collaborating
                                     </CardDescription>
                                 </CardHeader>
-                                <CardContent className="px-0 space-y-6">
+                                <CardContent className="px-6 space-y-6">
                                     <div className="space-y-3">
-                                        <Label htmlFor="room-id" className="text-sm font-medium text-slate-300 ml-1">Room ID</Label>
+                                        <Label htmlFor="room-id" className="text-sm font-black text-black ml-1 uppercase tracking-widest">Room ID</Label>
                                         <Input
                                             id="room-id"
                                             placeholder="e.g. 123e4567-e89b-12d3..."
                                             value={roomId}
                                             onChange={(e) => setRoomId(e.target.value)}
-                                            className="bg-white/5 border-white/10 focus:border-blue-500 h-12 text-base transition-all duration-300"
+                                            className="bg-white border-4 border-black neo-shadow-sm h-14 text-lg font-mono focus-visible:ring-0 focus-visible:ring-offset-0 focus:bg-[#f8f9fa] rounded-none"
                                         />
                                     </div>
                                     <div className="space-y-3">
-                                        <Label htmlFor="username" className="text-sm font-medium text-slate-300 ml-1">Your Name</Label>
+                                        <Label htmlFor="username" className="text-sm font-black text-black ml-1 uppercase tracking-widest">Your Name</Label>
                                         <Input
                                             id="username"
                                             placeholder="Enter your name"
                                             value={username}
                                             onChange={(e) => setUsername(e.target.value)}
-                                            className="bg-white/5 border-white/10 focus:border-blue-500 h-12 text-base transition-all duration-300"
+                                            className="bg-white border-4 border-black neo-shadow-sm h-14 text-lg font-mono focus-visible:ring-0 focus-visible:ring-offset-0 focus:bg-[#f8f9fa] rounded-none"
                                         />
                                     </div>
                                 </CardContent>
-                                <CardFooter className="px-0 pt-6">
+                                <CardFooter className="px-6 pt-6 pb-6">
                                     <Button
                                         onClick={handleJoin}
-                                        className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-7 text-lg shadow-[0_0_20px_rgba(37,99,235,0.3)] transition-all duration-300"
+                                        className="w-full bg-[#00E5FF] hover:bg-[#00B8D4] text-black font-black py-8 text-xl uppercase tracking-widest border-4 border-black neo-shadow-hover rounded-none transition-none"
                                     >
-                                        Join Codespace <ArrowRight size={20} className="ml-2" />
+                                        Join Codespace <ArrowRight size={24} className="ml-2 stroke-[3]" />
                                     </Button>
                                 </CardFooter>
                             </TabsContent>
 
                             <TabsContent value="create" className="p-6">
-                                <CardHeader className="px-0 pt-0 pb-6">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <Sparkles className="text-purple-400" size={24} />
-                                        <CardTitle className="text-2xl font-bold tracking-tight">Create a Room</CardTitle>
+                                <CardHeader className="px-0 pt-0 pb-6 border-b-4 border-black mb-6 bg-[#FFEB3B]">
+                                    <div className="flex items-center gap-2 mb-2 p-6 pb-0">
+                                        <Sparkles className="text-black stroke-[3]" size={28} />
+                                        <CardTitle className="text-3xl font-black tracking-tight text-black uppercase">Create a Room</CardTitle>
                                     </div>
-                                    <CardDescription className="text-slate-400 text-base">
+                                    <CardDescription className="text-black font-bold text-base px-6">
                                         Generate a new secure environment for your team
                                     </CardDescription>
                                 </CardHeader>
-                                <CardContent className="px-0 space-y-6">
+                                <CardContent className="px-6 space-y-6">
                                     <div className="space-y-3">
-                                        <Label htmlFor="new-username" className="text-sm font-medium text-slate-300 ml-1">Your Name</Label>
+                                        <Label htmlFor="new-username" className="text-sm font-black text-black ml-1 uppercase tracking-widest">Your Name</Label>
                                         <Input
                                             id="new-username"
                                             placeholder="Enter your name"
                                             value={createUsername}
                                             onChange={(e) => setCreateUsername(e.target.value)}
-                                            className="bg-white/5 border-white/10 focus:border-purple-500 h-12 text-base transition-all duration-300"
+                                            className="bg-white border-4 border-black neo-shadow-sm h-14 text-lg font-mono focus-visible:ring-0 focus-visible:ring-offset-0 focus:bg-[#f8f9fa] rounded-none"
                                         />
                                     </div>
                                     <div className="space-y-3">
-                                        <Label htmlFor="generated-id" className="text-sm font-medium text-slate-300 ml-1">Room ID</Label>
-                                        <div className="flex gap-2">
+                                        <Label htmlFor="generated-id" className="text-sm font-black text-black ml-1 uppercase tracking-widest">Room ID</Label>
+                                        <div className="flex gap-4">
                                             <Input
                                                 id="generated-id"
                                                 readOnly
                                                 value={createdRoomId}
                                                 placeholder="Click generate to create an ID"
-                                                className="bg-white/5 border-white/10 font-mono text-sm h-12 flex-1"
+                                                className="bg-[#f8f9fa] border-4 border-black neo-shadow-sm font-mono text-sm h-14 flex-1 rounded-none text-black"
                                             />
                                             {createdRoomId && (
                                                 <Button
                                                     onClick={() => copyToClipboard(createdRoomId)}
                                                     variant="outline"
                                                     size="icon"
-                                                    className="h-12 w-12 border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
+                                                    className="h-14 w-14 border-4 border-black bg-[#FFEB3B] neo-shadow-hover rounded-none transition-none"
                                                 >
-                                                    {copied ? <Check size={20} className="text-green-400" /> : <Copy size={20} />}
+                                                    {copied ? <Check size={24} className="text-black stroke-[3]" /> : <Copy size={24} className="stroke-[3]" />}
                                                 </Button>
                                             )}
                                         </div>
@@ -225,18 +220,18 @@ const Home = () => {
                                     <Button
                                         onClick={handleCreate}
                                         variant="outline"
-                                        className="w-full border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 h-11 transition-all duration-300"
+                                        className="w-full border-4 border-black bg-[#FF4081] text-black hover:bg-[#F50057] neo-shadow-hover h-14 text-lg font-black uppercase tracking-widest rounded-none transition-none"
                                     >
                                         Generate Secure ID
                                     </Button>
                                 </CardContent>
-                                <CardFooter className="px-0 pt-6">
+                                <CardFooter className="px-6 pt-6 pb-6">
                                     <Button
                                         onClick={handleEnterRoom}
                                         disabled={!createdRoomId}
-                                        className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-7 text-lg shadow-[0_0_20px_rgba(147,51,234,0.3)] transition-all duration-300 disabled:opacity-50"
+                                        className="w-full bg-[#FFEB3B] hover:bg-[#FDD835] text-black font-black py-8 text-xl uppercase tracking-widest border-4 border-black neo-shadow-hover rounded-none transition-none disabled:opacity-50 disabled:neo-shadow-sm"
                                     >
-                                        Launch Codespace <ArrowRight size={20} className="ml-2" />
+                                        Launch Codespace <ArrowRight size={24} className="ml-2 stroke-[3]" />
                                     </Button>
                                 </CardFooter>
                             </TabsContent>
@@ -247,37 +242,36 @@ const Home = () => {
                 {/* Recent Rooms */}
                 {recentRooms.length > 0 && (
                     <div className="mt-12 animate-slide-in-up" style={{ animationDelay: '200ms' }}>
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-semibold flex items-center gap-2 text-slate-400">
-                                <Clock size={18} />
+                        <div className="flex items-center justify-between mb-4 border-b-4 border-black pb-2 bg-white px-4 py-2 neo-shadow-sm">
+                            <h3 className="text-lg font-black flex items-center gap-2 text-black uppercase">
+                                <Clock size={20} className="stroke-[3]" />
                                 Recent Activity
                             </h3>
-                            <span className="text-xs text-slate-500 uppercase tracking-widest">Last 5 Rooms</span>
+                            <span className="text-xs text-black font-bold uppercase tracking-widest">Last 5 Rooms</span>
                         </div>
-                        <div className="space-y-3">
+                        <div className="space-y-4">
                             {recentRooms.map((room) => (
                                 <div
                                     key={room.id}
-                                    className="group relative border border-white/10 bg-white/5 backdrop-blur-sm hover:bg-white/10 hover:border-white/20 transition-all duration-300 rounded-xl cursor-pointer p-4 flex items-center justify-between"
+                                    className="group relative border-4 border-black bg-white hover:bg-[#00E5FF] neo-shadow-sm hover:neo-shadow-hover transition-none rounded-none cursor-pointer p-4 flex items-center justify-between"
                                     onClick={() => joinRecentRoom(room)}
                                 >
                                     <div className="flex-1">
-                                        <p className="font-mono text-xs text-blue-400 mb-1 tracking-tight">{room.id}</p>
+                                        <p className="font-mono text-sm text-black font-bold mb-1 tracking-tight">{room.id}</p>
                                         <div className="flex items-center gap-2">
-                                            <span className="text-sm font-medium text-white">{room.username}</span>
-                                            <span className="text-[10px] text-slate-500">•</span>
-                                            <span className="text-xs text-slate-500">{new Date(room.timestamp).toLocaleDateString()}</span>
+                                            <span className="text-base font-black text-black uppercase">{room.username}</span>
+                                            <span className="text-xs text-black font-bold border-l-2 border-black pl-2">{new Date(room.timestamp).toLocaleDateString()}</span>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-4">
                                         <button
                                             onClick={(e) => deleteRoom(room.id, e)}
-                                            className="p-2 rounded-lg hover:bg-red-500/20 text-slate-600 hover:text-red-400 transition-all opacity-0 group-hover:opacity-100"
+                                            className="p-2 border-2 border-transparent hover:border-black hover:bg-[#FF4081] text-black transition-none opacity-0 group-hover:opacity-100"
                                             title="Remove from history"
                                         >
-                                            <Trash2 size={16} />
+                                            <Trash2 size={20} className="stroke-[3]" />
                                         </button>
-                                        <ArrowRight size={18} className="text-slate-600 group-hover:text-white transition-colors" />
+                                        <ArrowRight size={24} className="text-black stroke-[3] group-hover:translate-x-1 transition-transform" />
                                     </div>
                                 </div>
                             ))}

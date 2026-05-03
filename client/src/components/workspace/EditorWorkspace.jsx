@@ -17,10 +17,8 @@ import FileExplorer from './FileExplorer';
 import EditorTabs from './EditorTabs';
 import Terminal from './Terminal';
 import ExecutionPanel from './ExecutionPanel';
-import AIPanel from './AIPanel';
 import CodeEditor from '../Editor';
 import { useCodeExecution } from '@/hooks/useCodeExecution';
-import { useAI } from '@/hooks/useAI';
 
 const EditorWorkspace = ({ moduleId, socket, roomId, username, theme = 'vs-dark' }) => {
     const { editorState, updateFileExplorerWidth } = useWorkspace();
@@ -36,39 +34,7 @@ const EditorWorkspace = ({ moduleId, socket, roomId, username, theme = 'vs-dark'
         [run, stdin]
     );
 
-    // ── AI Assistant ─────────────────────────────────────────────────────────
-    const { isStreaming, streamedText, error: aiError, mode, explain, fix, ask, cancel, clear } = useAI();
-    const [aiPanelOpen, setAiPanelOpen] = useState(false);
-    const [currentCode, setCurrentCode] = useState('');
-    const [currentLanguage, setCurrentLanguage] = useState('javascript');
 
-    const handleExplain = useCallback(
-        (code) => {
-            setCurrentCode(code);
-            setAiPanelOpen(true);
-            explain(code, currentLanguage);
-        },
-        [explain, currentLanguage]
-    );
-
-    const handleFix = useCallback(
-        (code) => {
-            setCurrentCode(code);
-            setAiPanelOpen(true);
-            // Include execution error as context if available
-            const errorContext = execError || result?.stderr || '';
-            fix(code, currentLanguage, errorContext);
-        },
-        [fix, currentLanguage, execError, result]
-    );
-
-    const handleAsk = useCallback(
-        (prompt, code, language) => {
-            setCurrentCode(code);
-            ask(prompt, code, language);
-        },
-        [ask]
-    );
 
     const showExecutionPanel = isRunning || result || execError;
 
@@ -111,8 +77,6 @@ const EditorWorkspace = ({ moduleId, socket, roomId, username, theme = 'vs-dark'
                                     theme={theme}
                                     isRunning={isRunning}
                                     onRun={handleRun}
-                                    onExplain={handleExplain}
-                                    onFix={handleFix}
                                 />
                             </div>
                         ))}
@@ -135,20 +99,7 @@ const EditorWorkspace = ({ moduleId, socket, roomId, username, theme = 'vs-dark'
                 <Terminal />
             </div>
 
-            {/* ── AI Panel (right side) ─────────────────────────────────────── */}
-            <AIPanel
-                isOpen={aiPanelOpen}
-                onClose={() => setAiPanelOpen(false)}
-                isStreaming={isStreaming}
-                streamedText={streamedText}
-                error={aiError}
-                mode={mode}
-                onCancel={cancel}
-                onClear={clear}
-                onAsk={handleAsk}
-                currentCode={currentCode}
-                currentLanguage={currentLanguage}
-            />
+
         </div>
     );
 };

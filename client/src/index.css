@@ -1,72 +1,64 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
 
 @layer base {
   :root {
-    --background: 0 0% 0%;
-    --foreground: 0 0% 100%;
+    --background: 0 0% 100%; /* Pure White */
+    --foreground: 0 0% 0%; /* Pure Black */
 
-    --card: 0 0% 5%;
-    --card-foreground: 0 0% 100%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 0%;
 
-    --popover: 0 0% 5%;
-    --popover-foreground: 0 0% 100%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 0%;
 
-    --primary: 0 0% 100%;
-    --primary-foreground: 0 0% 0%;
+    --primary: 54 100% 62%; /* Neon Yellow #FFEB3B */
+    --primary-foreground: 0 0% 0%; /* Black */
 
-    --secondary: 0 0% 15%;
-    --secondary-foreground: 0 0% 100%;
+    --secondary: 340 100% 63%; /* Neon Pink #FF4081 */
+    --secondary-foreground: 0 0% 0%;
 
-    --muted: 0 0% 15%;
-    --muted-foreground: 0 0% 60%;
+    --muted: 0 0% 90%;
+    --muted-foreground: 0 0% 40%;
 
-    --accent: 0 0% 15%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 186 100% 50%; /* Cyan #00E5FF */
+    --accent-foreground: 0 0% 0%;
 
-    --destructive: 0 84.2% 60.2%;
+    --destructive: 0 100% 50%; /* Red */
     --destructive-foreground: 0 0% 100%;
 
-    --border: 0 0% 20%;
-    --input: 0 0% 20%;
-    --ring: 0 0% 100%;
+    --border: 0 0% 0%; /* Solid Black Borders */
+    --input: 0 0% 0%;
+    --ring: 0 0% 0%;
 
-    --radius: 0rem;
-
-    /* Enhanced color palette */
-    --blue-accent: 217 91% 60%;
-    --purple-accent: 271 91% 65%;
-    --success: 142 76% 36%;
-    --warning: 38 92% 50%;
+    --radius: 0rem; /* Strictly no rounded corners */
   }
 
   .dark {
-    --background: 0 0% 0%;
-    --foreground: 0 0% 100%;
+    /* For Neo-Brutalism, we'll keep dark mode stark as well */
+    --background: 0 0% 0%; /* Pure Black */
+    --foreground: 0 0% 100%; /* Pure White */
 
-    --card: 0 0% 5%;
+    --card: 0 0% 0%;
     --card-foreground: 0 0% 100%;
 
-    --popover: 0 0% 5%;
+    --popover: 0 0% 0%;
     --popover-foreground: 0 0% 100%;
 
-    --primary: 0 0% 100%;
+    --primary: 54 100% 62%; /* Neon Yellow */
     --primary-foreground: 0 0% 0%;
 
-    --secondary: 0 0% 15%;
-    --secondary-foreground: 0 0% 100%;
+    --secondary: 340 100% 63%; /* Neon Pink */
+    --secondary-foreground: 0 0% 0%;
 
     --muted: 0 0% 15%;
     --muted-foreground: 0 0% 60%;
 
-    --accent: 0 0% 15%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 186 100% 50%; /* Cyan */
+    --accent-foreground: 0 0% 0%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border: 0 0% 20%;
-    --input: 0 0% 20%;
+    --border: 0 0% 100%; /* White borders in dark mode */
+    --input: 0 0% 100%;
     --ring: 0 0% 100%;
   }
 }
@@ -79,10 +71,8 @@
   body {
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
-    font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
-    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
-    letter-spacing: -0.05em;
-    text-transform: uppercase;
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 500;
   }
 
   code,
@@ -97,8 +87,35 @@
   h4,
   h5,
   h6 {
+    font-family: 'Space Grotesk', sans-serif;
     font-weight: 700;
-    letter-spacing: -0.05em;
+    letter-spacing: -0.02em;
+    text-transform: uppercase;
+  }
+}
+
+/* Neo-Brutalism Utilities */
+@layer utilities {
+  .neo-shadow {
+    box-shadow: 4px 4px 0px 0px hsl(var(--foreground));
+  }
+  
+  .neo-shadow-sm {
+    box-shadow: 2px 2px 0px 0px hsl(var(--foreground));
+  }
+
+  .neo-shadow-hover {
+    transition: transform 0.1s ease-in-out, box-shadow 0.1s ease-in-out;
+  }
+
+  .neo-shadow-hover:hover {
+    transform: translate(2px, 2px);
+    box-shadow: 2px 2px 0px 0px hsl(var(--foreground));
+  }
+
+  .neo-shadow-hover:active {
+    transform: translate(4px, 4px);
+    box-shadow: 0px 0px 0px 0px hsl(var(--foreground));
   }
 }
 

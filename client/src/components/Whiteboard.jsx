@@ -150,11 +150,11 @@ const Whiteboard = ({ socket, roomId }) => {
     };
 
     return (
-        <div className="flex flex-col h-full bg-white relative">
+        <div className="flex flex-col h-full bg-white relative font-mono">
             {/* Enhanced Floating Toolbar */}
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 glass-dark p-3 rounded-2xl shadow-2xl flex items-center gap-3 border border-white/20 z-10 backdrop-blur-xl">
+            <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-[#FFEB3B] p-3 rounded-none flex items-center gap-4 border-4 border-black z-10 neo-shadow-sm">
                 {/* Color Presets */}
-                <div className="flex gap-1.5 pr-3 border-r border-white/20">
+                <div className="flex gap-2 pr-4 border-r-4 border-black">
                     {colorPresets.map((preset) => (
                         <button
                             key={preset.color}
@@ -162,9 +162,9 @@ const Whiteboard = ({ socket, roomId }) => {
                                 setColor(preset.color);
                                 setTool("pen");
                             }}
-                            className={`w-7 h-7 rounded-lg border-2 transition-all hover:scale-110 ${color === preset.color && tool === "pen"
-                                    ? 'border-blue-400 scale-110 shadow-lg'
-                                    : 'border-white/30'
+                            className={`w-8 h-8 rounded-none border-4 border-black transition-none ${color === preset.color && tool === "pen"
+                                    ? 'scale-110 neo-shadow-sm'
+                                    : 'hover:neo-shadow-sm'
                                 }`}
                             style={{ backgroundColor: preset.color }}
                             title={preset.name}
@@ -173,66 +173,70 @@ const Whiteboard = ({ socket, roomId }) => {
                 </div>
 
                 {/* Tools */}
-                <div className="flex gap-1 pr-3 border-r border-white/20">
+                <div className="flex gap-2 pr-4 border-r-4 border-black">
                     <Button
-                        variant={tool === "pen" ? "default" : "ghost"}
+                        variant="ghost"
                         size="icon"
                         onClick={() => setTool("pen")}
-                        className="h-9 w-9 hover:bg-white/10"
+                        className={`h-10 w-10 border-4 border-black rounded-none transition-none ${tool === "pen" ? 'bg-[#00E5FF] neo-shadow-sm' : 'bg-white hover:bg-[#00E5FF]'}`}
                         title="Pen"
                     >
-                        <PenTool size={18} />
+                        <PenTool size={20} className="stroke-[3] text-black" />
                     </Button>
                     <Button
-                        variant={tool === "eraser" ? "default" : "ghost"}
+                        variant="ghost"
                         size="icon"
                         onClick={() => setTool("eraser")}
-                        className="h-9 w-9 hover:bg-white/10"
+                        className={`h-10 w-10 border-4 border-black rounded-none transition-none ${tool === "eraser" ? 'bg-[#FF4081] neo-shadow-sm' : 'bg-white hover:bg-[#FF4081]'}`}
                         title="Eraser"
                     >
-                        <Eraser size={18} />
+                        <Eraser size={20} className="stroke-[3] text-black" />
                     </Button>
                 </div>
 
                 {/* Stroke Width */}
-                <div className="flex items-center gap-2 pr-3 border-r border-white/20">
+                <div className="flex items-center gap-3 pr-4 border-r-4 border-black">
                     <input
                         type="range"
                         min="1"
                         max="20"
                         value={lineWidth}
                         onChange={(e) => setLineWidth(Number(e.target.value))}
-                        className="w-24 h-2 bg-white/20 rounded-lg cursor-pointer accent-blue-500"
+                        className="w-24 h-3 bg-white border-2 border-black rounded-none cursor-pointer accent-[#FF4081]"
                         title="Stroke Width"
                     />
                     <div
-                        className="w-6 h-6 rounded-full bg-white/90 flex items-center justify-center"
-                        style={{
-                            width: `${Math.max(lineWidth, 8)}px`,
-                            height: `${Math.max(lineWidth, 8)}px`
-                        }}
-                    />
+                        className="w-8 h-8 border-4 border-black bg-white flex items-center justify-center neo-shadow-sm"
+                    >
+                        <div
+                            className="rounded-full bg-black"
+                            style={{
+                                width: `${Math.max(lineWidth, 4)}px`,
+                                height: `${Math.max(lineWidth, 4)}px`
+                            }}
+                        />
+                    </div>
                 </div>
 
                 {/* Actions */}
-                <div className="flex gap-1">
+                <div className="flex gap-2">
                     <Button
                         variant="ghost"
                         size="icon"
                         onClick={toggleGrid}
-                        className={`h-9 w-9 hover:bg-white/10 ${showGrid ? 'bg-white/20' : ''}`}
+                        className={`h-10 w-10 border-4 border-black rounded-none transition-none ${showGrid ? 'bg-[#00E5FF] neo-shadow-sm' : 'bg-white hover:bg-[#00E5FF]'}`}
                         title="Toggle Grid"
                     >
-                        <Grid3x3 size={18} />
+                        <Grid3x3 size={20} className="stroke-[3] text-black" />
                     </Button>
                     <Button
                         variant="ghost"
                         size="icon"
                         onClick={clearBoard}
-                        className="h-9 w-9 hover:bg-red-500/20 text-red-500"
+                        className="h-10 w-10 border-4 border-black rounded-none transition-none bg-white hover:bg-[#FF4081] group"
                         title="Clear Board"
                     >
-                        <Trash2 size={18} />
+                        <Trash2 size={20} className="stroke-[3] text-black group-hover:text-black" />
                     </Button>
                 </div>
             </div>
