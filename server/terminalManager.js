@@ -1,6 +1,5 @@
-const pty = require('node-pty');
-const os = require('os');
-const fs = require('fs');
+import pty from 'node-pty';
+import os from 'os';
 
 class TerminalManager {
     constructor() {
@@ -131,4 +130,4 @@ process.on('SIGINT', () => {
     process.exit();
 });
 
-module.exports = terminalManager;
+export default terminalManager;

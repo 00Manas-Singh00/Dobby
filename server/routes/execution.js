@@ -3,8 +3,8 @@
  * Code execution endpoints. Proxies to Piston API via pistonService.
  */
 
-const express = require('express');
-const { execute, getRuntimes } = require('../services/pistonService');
+import express from 'express';
+import { execute, getRuntimes } from '../services/pistonService.js';
 
 const router = express.Router();
 
@@ -59,4 +59,4 @@ router.get('/runtimes', async (req, res) => {
     }
 });
 
-module.exports = router;
+export default router;

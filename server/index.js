@@ -1,15 +1,16 @@
-require('dotenv').config();
+import { v4 as uuidv4 } from 'uuid';
+import dotenv from 'dotenv';
+dotenv.config();
 
-const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
-const cors = require('cors');
-const { v4: uuidv4 } = require('uuid');
+import express from 'express';
+import http from 'http';
+import { Server } from 'socket.io';
+import cors from 'cors';
 
 // Internal services & routes
-const terminalManager = require('./terminalManager');
-const executionRouter = require('./routes/execution');
-const { setupYjs } = require('./services/yjsService');
+import terminalManager from './terminalManager.js';
+import executionRouter from './routes/execution.js';
+import { setupYjs } from './services/yjsService.js';
 
 const app = express();
 

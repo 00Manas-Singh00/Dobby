@@ -13,7 +13,7 @@ let runtimesCache = null;
  * Fetch and cache available Piston runtimes.
  * @returns {Promise<Array>} Array of runtime objects {language, version, aliases}
  */
-async function getRuntimes() {
+export const getRuntimes = async () => {
     if (runtimesCache) return runtimesCache;
 
     try {
@@ -36,7 +36,7 @@ async function getRuntimes() {
  * @param {string} language - e.g. "python", "javascript", "cpp"
  * @returns {Promise<{language: string, version: string} | null>}
  */
-async function resolveRuntime(language) {
+export const resolveRuntime =async (language) => {
     const runtimes = await getRuntimes();
     const normalized = language.toLowerCase().trim();
 
@@ -59,7 +59,7 @@ async function resolveRuntime(language) {
  * @param {string} [filename] - Optional filename hint (affects shebang detection etc.)
  * @returns {Promise<{stdout: string, stderr: string, exitCode: number, signal: string|null, time: number}>}
  */
-async function execute(language, code, stdin = '', filename = null) {
+export const execute =async (language, code, stdin = '', filename = null) => {
     const runtime = await resolveRuntime(language);
     if (!runtime) {
         throw new Error(`Unsupported language: "${language}". Check /api/runtimes for available options.`);
@@ -139,5 +139,3 @@ function getDefaultFilename(language) {
     };
     return map[language] || 'main.txt';
 }
-
-module.exports = { execute, getRuntimes, resolveRuntime };

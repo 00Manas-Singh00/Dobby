@@ -10,6 +10,9 @@
  *  3. Stores document state in-memory per room (upgradeable to LevelDB/Redis)
  */
 
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
 const { YSocketIO } = require('y-socket.io/dist/server');
 
 /**
@@ -17,7 +20,7 @@ const { YSocketIO } = require('y-socket.io/dist/server');
  *
  * @param {import('socket.io').Server} io - The Socket.IO server instance
  */
-function setupYjs(io) {
+export function setupYjs(io) {
     const ysocketio = new YSocketIO(io, {
         levelPersistenceDir: './.yjs-persistence',
         gcEnabled: true,
@@ -26,5 +29,3 @@ function setupYjs(io) {
 
     console.log('✓ Yjs CRDT service initialized with LevelDB persistence');
 }
-
-module.exports = { setupYjs };
