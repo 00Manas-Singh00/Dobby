@@ -1,8 +1,10 @@
+import { v4 as uuidv4 } from 'uuid';
+
 const express = require('express')
 const http = require('http')
 const { Server } = require('socket.io')
 const cors = require("cors")
-const { v4: uuidv4 } = require('uuid');
+
 const app = express(); // Initialize the app variable using express
 
 app.use(cors())
