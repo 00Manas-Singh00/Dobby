@@ -116,58 +116,58 @@ const Home = () => {
     ];
 
     return (
-        <div className="min-h-screen bg-[#f8f9fa] text-black flex items-center justify-center p-4 relative" style={{ backgroundImage: 'radial-gradient(#000 2px, transparent 2px)', backgroundSize: '32px 32px' }}>
+        <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-4 relative" style={{ backgroundImage: 'radial-gradient(#000 2px, transparent 2px)', backgroundSize: '32px 32px' }}>
 
             <div className="relative z-10 w-full max-w-2xl mt-12">
                 {/* Main Action Card */}
                 <div className="animate-scale-in">
-                    <Card className="border-4 border-black bg-white neo-shadow overflow-hidden rounded-none">
+                    <Card className="border-4 border-border bg-background neo-shadow overflow-hidden rounded-none">
                         <Tabs defaultValue="join" className="w-full">
-                            <TabsList className="grid w-full grid-cols-2 bg-white border-b-4 border-black p-0 rounded-none h-14">
-                                <TabsTrigger value="join" className="data-[state=active]:bg-[#00E5FF] data-[state=active]:text-black text-black font-black uppercase tracking-widest border-r-4 border-transparent data-[state=active]:border-black rounded-none h-full transition-none">
+                            <TabsList className="grid w-full grid-cols-2 bg-background border-b-4 border-border p-0 rounded-none h-14">
+                                <TabsTrigger value="join" className="data-[state=active]:bg-accent data-[state=active]:text-foreground text-foreground font-black uppercase tracking-widest border-r-4 border-transparent data-[state=active]:border-border rounded-none h-full transition-none">
                                     Join Room
                                 </TabsTrigger>
-                                <TabsTrigger value="create" className="data-[state=active]:bg-[#FFEB3B] data-[state=active]:text-black text-black font-black uppercase tracking-widest rounded-none h-full transition-none">
+                                <TabsTrigger value="create" className="data-[state=active]:bg-primary data-[state=active]:text-foreground text-foreground font-black uppercase tracking-widest rounded-none h-full transition-none">
                                     Create Room
                                 </TabsTrigger>
                             </TabsList>
 
                             <TabsContent value="join" className="p-6">
-                                <CardHeader className="px-0 pt-0 pb-6 border-b-4 border-black mb-6">
+                                <CardHeader className="px-0 pt-0 pb-6 border-b-4 border-border mb-6">
                                     <div className="flex items-center gap-2 mb-2 p-6 pb-0">
-                                        <Users className="text-black stroke-[3]" size={28} />
-                                        <CardTitle className="text-3xl font-black tracking-tight text-black uppercase">Join a Room</CardTitle>
+                                        <Users className="text-foreground stroke-[3]" size={28} />
+                                        <CardTitle className="text-3xl font-black tracking-tight text-foreground uppercase">Join a Room</CardTitle>
                                     </div>
-                                    <CardDescription className="text-black font-bold text-base px-6">
+                                    <CardDescription className="text-foreground font-bold text-base px-6">
                                         Enter the Room ID shared by your team to start collaborating
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent className="px-6 space-y-6">
                                     <div className="space-y-3">
-                                        <Label htmlFor="room-id" className="text-sm font-black text-black ml-1 uppercase tracking-widest">Room ID</Label>
+                                        <Label htmlFor="room-id" className="text-sm font-black text-foreground ml-1 uppercase tracking-widest">Room ID</Label>
                                         <Input
                                             id="room-id"
                                             placeholder="e.g. 123e4567-e89b-12d3..."
                                             value={roomId}
                                             onChange={(e) => setRoomId(e.target.value)}
-                                            className="bg-white border-4 border-black neo-shadow-sm h-14 text-lg font-mono focus-visible:ring-0 focus-visible:ring-offset-0 focus:bg-[#f8f9fa] rounded-none"
+                                            className="bg-background border-4 border-border neo-shadow-sm h-14 text-lg font-mono focus-visible:ring-0 focus-visible:ring-offset-0 focus:bg-background rounded-none"
                                         />
                                     </div>
                                     <div className="space-y-3">
-                                        <Label htmlFor="username" className="text-sm font-black text-black ml-1 uppercase tracking-widest">Your Name</Label>
+                                        <Label htmlFor="username" className="text-sm font-black text-foreground ml-1 uppercase tracking-widest">Your Name</Label>
                                         <Input
                                             id="username"
                                             placeholder="Enter your name"
                                             value={username}
                                             onChange={(e) => setUsername(e.target.value)}
-                                            className="bg-white border-4 border-black neo-shadow-sm h-14 text-lg font-mono focus-visible:ring-0 focus-visible:ring-offset-0 focus:bg-[#f8f9fa] rounded-none"
+                                            className="bg-background border-4 border-border neo-shadow-sm h-14 text-lg font-mono focus-visible:ring-0 focus-visible:ring-offset-0 focus:bg-background rounded-none"
                                         />
                                     </div>
                                 </CardContent>
                                 <CardFooter className="px-6 pt-6 pb-6">
                                     <Button
                                         onClick={handleJoin}
-                                        className="w-full bg-[#00E5FF] hover:bg-[#00B8D4] text-black font-black py-8 text-xl uppercase tracking-widest border-4 border-black neo-shadow-hover rounded-none transition-none"
+                                        className="w-full bg-accent hover:opacity-90 text-foreground font-black py-8 text-xl uppercase tracking-widest border-4 border-border neo-shadow-hover rounded-none transition-none"
                                     >
                                         Join Codespace <ArrowRight size={24} className="ml-2 stroke-[3]" />
                                     </Button>
@@ -175,44 +175,44 @@ const Home = () => {
                             </TabsContent>
 
                             <TabsContent value="create" className="p-6">
-                                <CardHeader className="px-0 pt-0 pb-6 border-b-4 border-black mb-6 bg-[#FFEB3B]">
+                                <CardHeader className="px-0 pt-0 pb-6 border-b-4 border-border mb-6 bg-primary">
                                     <div className="flex items-center gap-2 mb-2 p-6 pb-0">
-                                        <Sparkles className="text-black stroke-[3]" size={28} />
-                                        <CardTitle className="text-3xl font-black tracking-tight text-black uppercase">Create a Room</CardTitle>
+                                        <Sparkles className="text-foreground stroke-[3]" size={28} />
+                                        <CardTitle className="text-3xl font-black tracking-tight text-foreground uppercase">Create a Room</CardTitle>
                                     </div>
-                                    <CardDescription className="text-black font-bold text-base px-6">
+                                    <CardDescription className="text-foreground font-bold text-base px-6">
                                         Generate a new secure environment for your team
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent className="px-6 space-y-6">
                                     <div className="space-y-3">
-                                        <Label htmlFor="new-username" className="text-sm font-black text-black ml-1 uppercase tracking-widest">Your Name</Label>
+                                        <Label htmlFor="new-username" className="text-sm font-black text-foreground ml-1 uppercase tracking-widest">Your Name</Label>
                                         <Input
                                             id="new-username"
                                             placeholder="Enter your name"
                                             value={createUsername}
                                             onChange={(e) => setCreateUsername(e.target.value)}
-                                            className="bg-white border-4 border-black neo-shadow-sm h-14 text-lg font-mono focus-visible:ring-0 focus-visible:ring-offset-0 focus:bg-[#f8f9fa] rounded-none"
+                                            className="bg-background border-4 border-border neo-shadow-sm h-14 text-lg font-mono focus-visible:ring-0 focus-visible:ring-offset-0 focus:bg-background rounded-none"
                                         />
                                     </div>
                                     <div className="space-y-3">
-                                        <Label htmlFor="generated-id" className="text-sm font-black text-black ml-1 uppercase tracking-widest">Room ID</Label>
+                                        <Label htmlFor="generated-id" className="text-sm font-black text-foreground ml-1 uppercase tracking-widest">Room ID</Label>
                                         <div className="flex gap-4">
                                             <Input
                                                 id="generated-id"
                                                 readOnly
                                                 value={createdRoomId}
                                                 placeholder="Click generate to create an ID"
-                                                className="bg-[#f8f9fa] border-4 border-black neo-shadow-sm font-mono text-sm h-14 flex-1 rounded-none text-black"
+                                                className="bg-background border-4 border-border neo-shadow-sm font-mono text-sm h-14 flex-1 rounded-none text-foreground"
                                             />
                                             {createdRoomId && (
                                                 <Button
                                                     onClick={() => copyToClipboard(createdRoomId)}
                                                     variant="outline"
                                                     size="icon"
-                                                    className="h-14 w-14 border-4 border-black bg-[#FFEB3B] neo-shadow-hover rounded-none transition-none"
+                                                    className="h-14 w-14 border-4 border-border bg-primary neo-shadow-hover rounded-none transition-none"
                                                 >
-                                                    {copied ? <Check size={24} className="text-black stroke-[3]" /> : <Copy size={24} className="stroke-[3]" />}
+                                                    {copied ? <Check size={24} className="text-foreground stroke-[3]" /> : <Copy size={24} className="stroke-[3]" />}
                                                 </Button>
                                             )}
                                         </div>
@@ -220,7 +220,7 @@ const Home = () => {
                                     <Button
                                         onClick={handleCreate}
                                         variant="outline"
-                                        className="w-full border-4 border-black bg-[#FF4081] text-black hover:bg-[#F50057] neo-shadow-hover h-14 text-lg font-black uppercase tracking-widest rounded-none transition-none"
+                                        className="w-full border-4 border-border bg-secondary text-foreground hover:opacity-90 neo-shadow-hover h-14 text-lg font-black uppercase tracking-widest rounded-none transition-none"
                                     >
                                         Generate Secure ID
                                     </Button>
@@ -229,7 +229,7 @@ const Home = () => {
                                     <Button
                                         onClick={handleEnterRoom}
                                         disabled={!createdRoomId}
-                                        className="w-full bg-[#FFEB3B] hover:bg-[#FDD835] text-black font-black py-8 text-xl uppercase tracking-widest border-4 border-black neo-shadow-hover rounded-none transition-none disabled:opacity-50 disabled:neo-shadow-sm"
+                                        className="w-full bg-primary hover:opacity-90 text-foreground font-black py-8 text-xl uppercase tracking-widest border-4 border-border neo-shadow-hover rounded-none transition-none disabled:opacity-50 disabled:neo-shadow-sm"
                                     >
                                         Launch Codespace <ArrowRight size={24} className="ml-2 stroke-[3]" />
                                     </Button>
@@ -242,36 +242,36 @@ const Home = () => {
                 {/* Recent Rooms */}
                 {recentRooms.length > 0 && (
                     <div className="mt-12 animate-slide-in-up" style={{ animationDelay: '200ms' }}>
-                        <div className="flex items-center justify-between mb-4 border-b-4 border-black pb-2 bg-white px-4 py-2 neo-shadow-sm">
-                            <h3 className="text-lg font-black flex items-center gap-2 text-black uppercase">
+                        <div className="flex items-center justify-between mb-4 border-b-4 border-border pb-2 bg-background px-4 py-2 neo-shadow-sm">
+                            <h3 className="text-lg font-black flex items-center gap-2 text-foreground uppercase">
                                 <Clock size={20} className="stroke-[3]" />
                                 Recent Activity
                             </h3>
-                            <span className="text-xs text-black font-bold uppercase tracking-widest">Last 5 Rooms</span>
+                            <span className="text-xs text-foreground font-bold uppercase tracking-widest">Last 5 Rooms</span>
                         </div>
                         <div className="space-y-4">
                             {recentRooms.map((room) => (
                                 <div
                                     key={room.id}
-                                    className="group relative border-4 border-black bg-white hover:bg-[#00E5FF] neo-shadow-sm hover:neo-shadow-hover transition-none rounded-none cursor-pointer p-4 flex items-center justify-between"
+                                    className="group relative border-4 border-border bg-background hover:bg-accent neo-shadow-sm hover:neo-shadow-hover transition-none rounded-none cursor-pointer p-4 flex items-center justify-between"
                                     onClick={() => joinRecentRoom(room)}
                                 >
                                     <div className="flex-1">
-                                        <p className="font-mono text-sm text-black font-bold mb-1 tracking-tight">{room.id}</p>
+                                        <p className="font-mono text-sm text-foreground font-bold mb-1 tracking-tight">{room.id}</p>
                                         <div className="flex items-center gap-2">
-                                            <span className="text-base font-black text-black uppercase">{room.username}</span>
-                                            <span className="text-xs text-black font-bold border-l-2 border-black pl-2">{new Date(room.timestamp).toLocaleDateString()}</span>
+                                            <span className="text-base font-black text-foreground uppercase">{room.username}</span>
+                                            <span className="text-xs text-foreground font-bold border-l-2 border-border pl-2">{new Date(room.timestamp).toLocaleDateString()}</span>
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-4">
                                         <button
                                             onClick={(e) => deleteRoom(room.id, e)}
-                                            className="p-2 border-2 border-transparent hover:border-black hover:bg-[#FF4081] text-black transition-none opacity-0 group-hover:opacity-100"
+                                            className="p-2 border-2 border-transparent hover:border-border hover:bg-secondary text-foreground transition-none opacity-0 group-hover:opacity-100"
                                             title="Remove from history"
                                         >
                                             <Trash2 size={20} className="stroke-[3]" />
                                         </button>
-                                        <ArrowRight size={24} className="text-black stroke-[3] group-hover:translate-x-1 transition-transform" />
+                                        <ArrowRight size={24} className="text-foreground stroke-[3] group-hover:translate-x-1 transition-transform" />
                                     </div>
                                 </div>
                             ))}
