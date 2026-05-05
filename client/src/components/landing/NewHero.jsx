@@ -1,12 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
-import Lottie from 'lottie-react';
 import { motion } from 'framer-motion';
-import { ArrowRight, Code2, Sparkles, Zap } from 'lucide-react';
-
-// A high-quality lottie animation for development/coding
-const LOTTIE_URL = "https://assets9.lottiefiles.com/packages/lf20_m6cuL6.json";
+import { ArrowRight } from 'lucide-react';
 
 export const NewHero = ({ onLaunch }) => {
     const containerRef = useRef(null);
@@ -103,13 +99,54 @@ export const NewHero = ({ onLaunch }) => {
                 </div>
 
                 {/* Right Visual */}
-                <div ref={lottieRef} className="relative aspect-square w-full max-w-xl mx-auto lg:mr-0 border-4 border-black neo-shadow bg-[#FFEB3B] p-4">
-                    <Lottie 
-                        animationData={null} // We'll load via path
-                        path={LOTTIE_URL}
-                        loop={true}
-                        className="w-full h-full relative z-10 mix-blend-multiply"
-                    />
+                <div ref={lottieRef} className="relative aspect-square w-full max-w-xl mx-auto lg:mr-0 border-4 border-black neo-shadow bg-[#FFEB3B] p-4 overflow-hidden">
+                    <svg viewBox="0 0 600 600" className="w-full h-full relative z-10">
+                        <defs>
+                            <linearGradient id="heroBg" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stopColor="#00E5FF" />
+                                <stop offset="100%" stopColor="#FF4081" />
+                            </linearGradient>
+                        </defs>
+                        <rect x="0" y="0" width="600" height="600" fill="#fff9c4" />
+                        <rect x="40" y="60" width="520" height="360" rx="16" fill="#111" stroke="#000" strokeWidth="8" />
+                        <rect x="40" y="60" width="520" height="48" fill="url(#heroBg)" />
+                        <circle cx="78" cy="84" r="8" fill="#FFEB3B">
+                            <animate attributeName="r" values="8;10;8" dur="2.4s" repeatCount="indefinite" />
+                        </circle>
+                        <circle cx="106" cy="84" r="8" fill="#00E5FF">
+                            <animate attributeName="r" values="8;10;8" dur="2.2s" repeatCount="indefinite" />
+                        </circle>
+                        <circle cx="134" cy="84" r="8" fill="#FF4081">
+                            <animate attributeName="r" values="8;10;8" dur="2s" repeatCount="indefinite" />
+                        </circle>
+
+                        <rect x="68" y="142" width="170" height="14" fill="#00E5FF">
+                            <animate attributeName="width" values="90;200;120;170" dur="3s" repeatCount="indefinite" />
+                        </rect>
+                        <rect x="68" y="176" width="240" height="14" fill="#FFEB3B">
+                            <animate attributeName="width" values="180;260;140;240" dur="2.8s" repeatCount="indefinite" />
+                        </rect>
+                        <rect x="68" y="210" width="200" height="14" fill="#FF4081">
+                            <animate attributeName="width" values="140;220;160;200" dur="3.2s" repeatCount="indefinite" />
+                        </rect>
+                        <rect x="68" y="244" width="120" height="14" fill="#ffffff">
+                            <animate attributeName="width" values="100;180;140;120" dur="2.6s" repeatCount="indefinite" />
+                        </rect>
+
+                        <g>
+                            <rect x="370" y="150" width="170" height="170" rx="14" fill="#1c1c1c" stroke="#00E5FF" strokeWidth="6" />
+                            <path d="M420 230 L455 195 M455 195 L490 230" stroke="#FFEB3B" strokeWidth="10" fill="none" strokeLinecap="round" />
+                            <path d="M420 240 L455 275 M455 275 L490 240" stroke="#FF4081" strokeWidth="10" fill="none" strokeLinecap="round" />
+                            <animateTransform attributeName="transform" type="translate" values="0 0;0 -8;0 0" dur="2.4s" repeatCount="indefinite" />
+                        </g>
+
+                        <circle cx="470" cy="470" r="44" fill="#00E5FF" stroke="#000" strokeWidth="6">
+                            <animate attributeName="r" values="38;48;38" dur="2.5s" repeatCount="indefinite" />
+                        </circle>
+                        <polygon points="458,448 458,492 496,470" fill="#000">
+                            <animateTransform attributeName="transform" type="scale" values="1;1.08;1" dur="1.8s" repeatCount="indefinite" />
+                        </polygon>
+                    </svg>
                 </div>
             </div>
             
