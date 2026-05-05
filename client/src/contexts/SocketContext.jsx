@@ -9,7 +9,7 @@ export const SocketProvider = ({ children }) => {
     const [socket, setSocket] = useState(null);
 
     useEffect(() => {
-        const serverUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:5001';
+        const serverUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5001';
         const newSocket = io(serverUrl);
         setSocket(newSocket);
 
