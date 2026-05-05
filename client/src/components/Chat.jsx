@@ -22,7 +22,12 @@ const Chat = ({ socket, roomId, username }) => {
         if (!socket) return;
 
         socket.on("receive_message", (messageData) => {
-            setMessages((prev) => [...prev, messageData]);
+            setMessages((prev) => {
+                if (messageData?.messageId && prev.some((msg) => msg.messageId === messageData.messageId)) {
+                    return prev;
+                }
+                return [...prev, messageData];
+            });
         });
 
         return () => {
@@ -41,7 +46,6 @@ const Chat = ({ socket, roomId, username }) => {
             };
 
             socket.emit("send_message", msgData);
-            setMessages((prev) => [...prev, { ...msgData, user: username, messageId: 'temp-' + Date.now() }]);
             setInput("");
         }
     };
