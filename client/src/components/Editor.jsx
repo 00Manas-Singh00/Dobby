@@ -32,7 +32,10 @@ const CodeEditor = ({
     isRunning = false,
     onRun,
 }) => {
-    const [language, setLanguage] = useState('javascript');
+    const [language, setLanguage] = useState(() => {
+        if (!roomId) return 'javascript';
+        return localStorage.getItem(`dobby_room_${roomId}_language`) || 'javascript';
+    });
     const [showLangDropdown, setShowLangDropdown] = useState(false);
     const editorRef = useRef(null);
     const monacoRef = useRef(null);
@@ -46,6 +49,9 @@ const CodeEditor = ({
 
         const handleLanguageChange = ({ languageUsed }) => {
             setLanguage(languageUsed);
+            if (roomId && languageUsed) {
+                localStorage.setItem(`dobby_room_${roomId}_language`, languageUsed);
+            }
         };
 
         socket.on('on language change', handleLanguageChange);
@@ -58,6 +64,9 @@ const CodeEditor = ({
     const handleLanguageChange = useCallback(
         (newLang) => {
             setLanguage(newLang);
+            if (roomId) {
+                localStorage.setItem(`dobby_room_${roomId}_language`, newLang);
+            }
             setShowLangDropdown(false);
             socket?.emit('update language', { roomId, languageUsed: newLang });
         },

@@ -11,12 +11,20 @@ import VideoWorkspace from './VideoWorkspace';
 import WhiteboardWorkspace from './WhiteboardWorkspace';
 import ChatWorkspace from './ChatWorkspace';
 import FloatingVideoPlayer from './FloatingVideoPlayer';
+
+const getRoomStorageKey = (roomId, key) => `dobby_room_${roomId}_${key}`;
+
 const WorkspaceShellContent = () => {
     const { roomId } = useParams();
     const location = useLocation();
     const navigate = useNavigate();
     const socket = useSocket();
-    const [username] = useState(location.state?.username || '');
+    const [username] = useState(() => {
+        const routeUsername = location.state?.username;
+        if (routeUsername) return routeUsername;
+        if (!roomId) return '';
+        return sessionStorage.getItem(getRoomStorageKey(roomId, 'username')) || '';
+    });
     const [users, setUsers] = useState([]);
     const [editorTheme, setEditorTheme] = useState('vs-dark');
 
@@ -29,6 +37,24 @@ const WorkspaceShellContent = () => {
         setSidebarWidth,
         videoState,
     } = useWorkspace();
+
+    useEffect(() => {
+        if (!roomId || !username) return;
+        sessionStorage.setItem(getRoomStorageKey(roomId, 'username'), username);
+    }, [roomId, username]);
+
+    useEffect(() => {
+        if (!roomId) return;
+        const savedModule = localStorage.getItem(getRoomStorageKey(roomId, 'active_module'));
+        if (savedModule) {
+            setActiveModule(savedModule);
+        }
+    }, [roomId, setActiveModule]);
+
+    useEffect(() => {
+        if (!roomId || !activeModule) return;
+        localStorage.setItem(getRoomStorageKey(roomId, 'active_module'), activeModule);
+    }, [roomId, activeModule]);
 
     // Socket connection and room  management
     useEffect(() => {

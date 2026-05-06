@@ -6,7 +6,10 @@ import { Send, Smile } from 'lucide-react';
 
 const Chat = ({ socket, roomId, username }) => {
     const [messages, setMessages] = useState([]);
-    const [input, setInput] = useState("");
+    const [input, setInput] = useState(() => {
+        if (!roomId) return '';
+        return sessionStorage.getItem(`dobby_room_${roomId}_chat_draft`) || '';
+    });
     const messagesEndRef = useRef(null);
     const messagesContainerRef = useRef(null);
 
@@ -17,6 +20,11 @@ const Chat = ({ socket, roomId, username }) => {
     useEffect(() => {
         scrollToBottom();
     }, [messages]);
+
+    useEffect(() => {
+        if (!roomId) return;
+        sessionStorage.setItem(`dobby_room_${roomId}_chat_draft`, input);
+    }, [roomId, input]);
 
     useEffect(() => {
         if (!socket) return;
@@ -47,6 +55,9 @@ const Chat = ({ socket, roomId, username }) => {
 
             socket.emit("send_message", msgData);
             setInput("");
+            if (roomId) {
+                sessionStorage.removeItem(`dobby_room_${roomId}_chat_draft`);
+            }
         }
     };
 
