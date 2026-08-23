@@ -1,192 +1,141 @@
-# Dobby - Cloud Based IDE for Pair Programming
+# Dobby — a cloud-based IDE for pair programming
 
-A real-time collaborative coding environment built with React and Socket.IO, enabling multiple users to code together with integrated video conferencing, whiteboarding, and terminal access.
+Two people, one URL, one workspace. Dobby puts a collaborative editor, a real
+terminal, code execution, a whiteboard, and a video call in a single browser tab,
+so a pairing session never requires leaving it.
 
-## Project Overview
+Editing is conflict-free — both people can type in the same file at the same
+time, see each other's cursors, and never lose a character — because the editor
+buffer is a CRDT ([Yjs](https://yjs.dev)) rather than a broadcast of the file's
+contents.
 
-Dobby is a comprehensive collaborative coding platform that enables multiple users to work together simultaneously on code, video calls, whiteboarding, and chat. It's designed for pair programming workflows with full terminal access and peer-to-peer video streaming.
-
----
-
-## Frontend Architecture (Client)
-
-### Technology Stack
-
-- **React 19.2** - Functional components with hooks
-- **Vite** - Modern build tool and dev server (ES modules)
-- **React Router 7.13** - SPA routing with two main routes:
-  - `/` (Home page - join/create rooms)
-  - `/room/:roomId` (Collaborative workspace)
-- **Tailwind CSS 4** - Utility-first CSS with custom HSL color variables
-- **Socket.IO Client 4.8.3** - Real-time bidirectional communication
-
-### UI Component Libraries
-
-- **Radix UI** - Headless, accessible components (Avatar, Dialog, Label, Popover, Select, Tabs, Scroll Area)
-- **Lucide React** - 560+ icon library
-- **shadcn/ui** - Custom-built components (Button, Card, Input, Select, Tabs, Textarea)
-- **React Resizable Panels 4.4.2** - Draggable, resizable panel layouts
-- **next-themes** - Dark/light mode support
-
-### Key Dependencies
-
-- **@monaco-editor/react 4.7** - VSCode-like code editor with syntax highlighting (JavaScript, Python, Java, C++, HTML, CSS, TypeScript, JSON)
-- **simple-peer 9.11.1** - WebRTC P2P video streaming library
-- **@xterm/xterm 6.0** - Terminal emulator
-- **react-hot-toast** - Toast notifications
-- **sonner 2.0** - Modern toast library
-- **uuid 13** - Unique room ID generation
-- **class-variance-authority** - Type-safe CSS class management
-- **clsx** - Conditional className utilities
-
-### Project Structure
-
-### State Management
-
-- **React Context API** (no Redux):
-  - `SocketContext` - Provides socket instance to entire app
-  - `WorkspaceContext` - Manages editor files, terminal height, sidebar width, video position (all persisted to localStorage)
-
-### Real-time Communication Flow
-
-**Socket Events (Client → Server):**
-- `join room` - Enter collaborative space
-- `update code` - Broadcast code changes
-- `update language` - Broadcast language changes
-- `syncing the code` - Request latest code state
-- `send_message` - Chat message
-- `draw` - Whiteboard drawing event
-- `clear canvas` - Whiteboard clear
-- `join video` - Initialize video stream
-- `sending signal` - WebRTC offer/answer
-- `returning signal` - WebRTC answer
-- `terminal:*` - Terminal I/O events
+> **Not production-ready.** Dobby has **no authentication**: anyone with a room
+> URL has full access to that room. Run it locally or on a trusted network. Read
+> [docs/04-security-model.md](./docs/04-security-model.md) before deploying
+> anything anywhere.
 
 ---
 
-## Backend Architecture (Server)
+## What works
 
-### Technology Stack
+| | |
+|---|---|
+| **Collaborative editor** | Monaco with Yjs CRDT sync, live remote cursors, one document per open file |
+| **Code execution** | ~40 languages via the Piston API, with stdin — nothing runs on the Dobby host |
+| **Terminal** | A real PTY through `node-pty` + xterm.js. **Off by default** — see below |
+| **Whiteboard** | Shared canvas over Socket.IO |
+| **Video & audio** | WebRTC peer-to-peer via `simple-peer`; the server only signals |
+| **Chat** | With history replayed to a user who joins mid-session |
+| **Presence** | Room roster plus in-editor cursor awareness |
 
-- **Node.js** with CommonJS modules
-- **Express 5.2.1** - HTTP server framework with CORS
-- **Socket.IO 4.8.3** - Real-time WebSocket communication
-- **node-pty 1.2.0-beta.8** - Pseudo-terminal creation and management
-- **UUID 13** - Unique ID generation
-- **Nodemon 3.1** - Dev auto-restart tool
+Rooms hold **two participants** by design — Dobby is a pairing tool
+([ADR-006](./docs/07-adrs.md#adr-006)).
 
-### Core Features
+## Known gaps
 
-#### 1. Room Management
+- No authentication or authorization.
+- The file explorer is a **hardcoded mock**; files can be edited but not created,
+  renamed, or deleted.
+- Chat and whiteboard content live in server memory and do not survive a restart.
+  A late joiner sees an empty canvas.
+- No tests and no CI.
+- Single node only — all room state is in-process.
 
-- In-memory maps for state:
-  - `socketID_to_Users_Map` - Map socket IDs to usernames
-  - `roomID_to_Code_Map` - Store code state per room
-- **Room capacity**: Maximum 2 users per room (validated on join)
-- User list broadcasting on state changes
-
-#### 2. Code Synchronization
-
-- Stores current code and language per room
-- When new user joins, latest code/language is emitted to them
-- Real-time code diffs propagated to other users
-- Sync status indicators shown in UI
-
-#### 3. Terminal Management
-
-Via `terminalManager.js`:
-
-- **PTY (Pseudo-Terminal) Spawning** using `node-pty`:
-  - Spawns shell process (/bin/bash on macOS/Linux, powershell.exe on Windows)
-  - Runs in user's home directory with inherited environment
-  - Default size: 80×30 columns/rows
-- **Terminal Operations:**
-  - `createTerminal()` - Spawn new PTY per socket
-  - `writeToTerminal()` - Send input to PTY
-  - `resizeTerminal()` - Handle window resize events
-  - `destroyTerminal()` - Clean up on disconnect
-- **Lifecycle Management:**
-  - Terminal output streamed to client via `terminal:output`
-  - Exit signals (`terminal:exit`) on process termination
-  - Graceful cleanup on SIGINT/process exit
-
-#### 4. Video Streaming (WebRTC)
-
-- Socket acts as signaling server for peer connections
-- Manages SDP offers/answers between peers
-- simple-peer library handles ICE candidates and media streams
-
-#### 5. Whiteboard
-
-- Canvas drawing events relayed to other users
-- Clear canvas broadcast
-
-#### 6. Chat
-
-- Messages with metadata (timestamp, username, UUID)
-- Broadcast to entire room
-
-### Socket.IO Architecture
-io.on('connection')
-├── join room # Capacity check (2 max), emit to room
-├── update code # Real-time sync
-├── send_message # Chat
-├── drawing events # Whiteboard
-├── video events # WebRTC signaling
-├── terminal:* # PTY I/O
-└── disconnect/cleanup # Cleanup
-
+Full picture and ordering in [docs/06-roadmap.md](./docs/06-roadmap.md).
 
 ---
 
-## Data Flow Example: Code Collaboration
+## Getting started
 
-1. **User A** types code → `handleCodeChange()` → `socket.emit("update code", {roomId, code})`
-2. **Server** receives → stores in `roomID_to_Code_Map[roomId].code`
-3. **Server** broadcasts → `socket.to(roomId).emit("on code change", {code})`
-4. **User B** receives → `socket.on("on code change")` → `setCode(code)` → Monaco editor re-renders
-5. **New User C joins** → Server emits stored code → User C syncs instantly
-
----
-
-## UI/UX Features
-
-- **Responsive Layout** - Resizable panels with draggable dividers
-- **Tab System** - Multiple files open simultaneously in editor
-- **Floating Video Player** - PiP video overlay while using other tools
-- **Status Indicators** - Sync confirmation badges, user presence, room status
-- **Local Storage Persistence** - Panel widths, terminal height, video position remembered
-- **Toast Notifications** - User join/leave, copy confirmations, errors (Sonner)
-- **Dark Theme** - Slate color palette with gradient accents
-- **Recent Rooms** - Quick access to previously visited collaborative spaces
-
----
-
-## Technical Highlights
-
-1. **P2P Video** - Uses WebRTC via simple-peer; socket only for signaling
-2. **Terminal Integration** - Full shell access via PTY—users can run commands directly
-3. **Scalability Limitations** - In-memory state means lost on server restart; max 2 users enforced
-4. **Real-time Sync** - Sub-100ms latency via Socket.IO (WebSocket with fallbacks)
-5. **Build Optimization** - Vite provides instant HMR during dev, tree-shaking in production
-6. **Accessibility** - Built on Radix UI (ARIA-compliant components)
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18+
-- npm or yarn
-
-### Installation
+**Prerequisites:** Node.js 18+.
 
 ```bash
-# Install server dependencies
+# Server
 cd server
 npm install
+cp .env.example .env        # then edit it — see the table below
+npm run dev                 # http://localhost:5001
 
-# Install client dependencies
-cd ../client
+# Client, in a second terminal
+cd client
 npm install
+npm run dev                 # http://localhost:5173
+```
+
+Open the client, enter a username, create a room, and share the URL with a
+second browser (or an incognito window) to pair with yourself.
+
+### Configuration
+
+Server (`server/.env`):
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `PORT` | `5001` | HTTP and Socket.IO port |
+| `ALLOWED_ORIGINS` | `http://localhost:5173` | Comma-separated exact origins. **Set this for any real deployment.** |
+| `ENABLE_TERMINAL` | `false` | Master switch for PTY sessions |
+| `TERMINAL_WORKSPACE_ROOT` | `<tmpdir>/dobby-workspaces` | Per-session shell working directories |
+
+Client (`client/.env`): `VITE_API_BASE_URL` and `VITE_SOCKET_URL`, both
+defaulting to `http://localhost:5001`.
+
+### Enabling the terminal
+
+Set `ENABLE_TERMINAL=true`. Understand first what you are turning on: a shell
+running as the server user, available to anyone in the room, on a system with no
+authentication. Sessions are confined to a scratch directory and run with a
+scrubbed environment, but they are **not sandboxed** —
+[ADR-005](./docs/07-adrs.md#adr-005) is explicit about the difference. Enable it
+on your own machine or on a disposable host, not on anything you care about.
+
+---
+
+## Architecture at a glance
+
+```
+Browser                              Node.js server
+────────────────────────             ──────────────────────────────
+Monaco ──y-monaco── Y.Doc ─┐    ┌──► YSocketIO ──► LevelDB
+xterm.js                    ├─Socket.IO─┤
+Canvas, chat, roster       ─┘    ├──► terminalManager ──► node-pty
+                                 └──► /api/execute ──► Piston (remote)
+<video> ◄──── WebRTC, peer-to-peer ────► <video>
+```
+
+The load-bearing detail: **Yjs owns the code buffer end to end.** Application
+code never handles a keystroke, stores a document, or resolves a conflict.
+Everything else — rooms, chat, whiteboard, WebRTC signaling, terminal I/O — is
+ordinary Socket.IO events. [docs/03](./docs/03-realtime-sync.md) explains why,
+and where the seams are.
+
+## Project layout
+
+```
+client/          React 19 + Vite + Tailwind 4
+  src/
+    components/workspace/   the room: shell, sidebar, editor, terminal, panels
+    hooks/useYjsEditor.js   the only place that touches Yjs
+    contexts/               socket + workspace layout state
+server/
+  index.js                  rooms, chat, whiteboard, WebRTC signaling, terminal events
+  terminalManager.js        PTY lifecycle
+  services/yjsService.js    Yjs transport + persistence
+  services/pistonService.js remote execution client
+  routes/execution.js       /api/execute, /api/runtimes
+docs/                       the documents below
+```
+
+## Documentation
+
+| # | Document | Purpose |
+|---|---|---|
+| 01 | [Product Overview](./docs/01-product-overview.md) | What Dobby is, who for, honest feature status |
+| 02 | [Architecture](./docs/02-architecture.md) | Components, data flow, the two sync mechanisms |
+| 03 | [Real-Time Sync](./docs/03-realtime-sync.md) | How collaborative editing works and what isn't CRDT-synced |
+| 04 | [Security Model](./docs/04-security-model.md) | Threat model, terminal controls, deployment checklist |
+| 05 | [API & Protocol](./docs/05-api-and-protocol.md) | Every REST endpoint and Socket.IO event |
+| 06 | [Roadmap](./docs/06-roadmap.md) | What's missing, in priority order |
+| 07 | [ADRs](./docs/07-adrs.md) | Decisions and the alternatives rejected |
+
+Start with 01 and 02. If you are reviewing the engineering rather than using the
+product, 03 and 07 are where the reasoning lives.

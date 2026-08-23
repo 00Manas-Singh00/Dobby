@@ -29,6 +29,23 @@ const Chat = ({ socket, roomId, username }) => {
     useEffect(() => {
         if (!socket) return;
 
+        const mergeByMessageId = (existing, incoming) => {
+            const seen = new Set(existing.map((msg) => msg.messageId));
+            const merged = [...existing];
+            for (const msg of incoming) {
+                if (msg?.messageId && seen.has(msg.messageId)) continue;
+                if (msg?.messageId) seen.add(msg.messageId);
+                merged.push(msg);
+            }
+            return merged;
+        };
+
+        const handleChatHistory = ({ messages: history }) => {
+            if (!Array.isArray(history)) return;
+            setMessages((prev) => mergeByMessageId([], [...history, ...prev]));
+        };
+
+        socket.on("chat history", handleChatHistory);
         socket.on("receive_message", (messageData) => {
             setMessages((prev) => {
                 if (messageData?.messageId && prev.some((msg) => msg.messageId === messageData.messageId)) {
@@ -39,6 +56,7 @@ const Chat = ({ socket, roomId, username }) => {
         });
 
         return () => {
+            socket.off("chat history", handleChatHistory);
             socket.off("receive_message");
         };
     }, [socket]);

@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E '\\\\.\\(js|jsx\\)$')",
+      "Bash(node --check index.js)",
+      "Bash(node --check terminalManager.js)"
+    ]
+  }
+}

@@ -1,15 +1,57 @@
 import pty from 'node-pty';
 import os from 'os';
+import fs from 'fs';
+import path from 'path';
+
+// The terminal hands a room's occupants a real shell on this host. It is opt-in
+// and confined to a per-room scratch directory; see docs/04-security-model.md.
+export const TERMINAL_ENABLED = process.env.ENABLE_TERMINAL === 'true';
+
+// Root under which each room gets its own working directory. Never the server
+// user's $HOME — that would expose the whole machine to anyone with a room URL.
+const WORKSPACE_ROOT = path.resolve(
+    process.env.TERMINAL_WORKSPACE_ROOT || path.join(os.tmpdir(), 'dobby-workspaces')
+);
+
+// Only these variables reach the child shell. `process.env` carries the
+// server's own configuration (API keys, DB paths) and must not be inherited.
+const ENV_ALLOWLIST = ['PATH', 'LANG', 'LC_ALL', 'TZ', 'TERM'];
+
+function buildChildEnv() {
+    const env = { TERM: 'xterm-color' };
+    for (const key of ENV_ALLOWLIST) {
+        if (process.env[key] !== undefined) env[key] = process.env[key];
+    }
+    return env;
+}
+
+/**
+ * Resolve (and create) the sandbox directory for a session, guaranteeing the
+ * result stays inside WORKSPACE_ROOT even if the session key is hostile.
+ */
+function resolveWorkspace(sessionKey) {
+    const slug = sessionKey.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const dir = path.resolve(WORKSPACE_ROOT, slug);
+    if (dir !== WORKSPACE_ROOT && !dir.startsWith(WORKSPACE_ROOT + path.sep)) {
+        throw new Error(`Refusing to create terminal outside workspace root: ${sessionKey}`);
+    }
+    fs.mkdirSync(dir, { recursive: true });
+    return dir;
+}
 
 class TerminalManager {
     constructor() {
-        this.terminals = new Map(); // socketId -> ptyProcess
+        this.terminals = new Map(); // sessionKey -> ptyProcess
     }
 
     /**
      * Create a new PTY session for a socket
      */
-    createTerminal(socketId) {
+    createTerminal(sessionKey) {
+        if (!TERMINAL_ENABLED) {
+            throw new Error('Terminal is disabled. Set ENABLE_TERMINAL=true to enable it.');
+        }
+
         // Determine shell based on platform
         let shell;
         if (os.platform() === 'win32') {
@@ -19,9 +61,11 @@ class TerminalManager {
             shell = '/bin/bash';
         }
 
-        console.log(`Creating terminal for socket ${socketId}`);
+        const cwd = resolveWorkspace(sessionKey);
+
+        console.log(`Creating terminal for session ${sessionKey}`);
         console.log(`  Shell: ${shell}`);
-        console.log(`  CWD: ${process.env.HOME}`);
+        console.log(`  CWD: ${cwd}`);
         console.log(`  Platform: ${os.platform()}`);
 
         try {
@@ -30,12 +74,12 @@ class TerminalManager {
                 name: 'xterm-color',
                 cols: 80,
                 rows: 30,
-                cwd: process.env.HOME || process.env.USERPROFILE || '/',
-                env: process.env,
+                cwd,
+                env: buildChildEnv(),
             });
 
             // Store the PTY process
-            this.terminals.set(socketId, ptyProcess);
+            this.terminals.set(sessionKey, ptyProcess);
 
             console.log(`✓ Terminal created successfully with PID ${ptyProcess.pid}`);
 
@@ -48,8 +92,8 @@ class TerminalManager {
 
     /** Write data to a terminal
      */
-    writeToTerminal(socketId, data) {
-        const terminal = this.terminals.get(socketId);
+    writeToTerminal(sessionKey, data) {
+        const terminal = this.terminals.get(sessionKey);
         if (terminal) {
             terminal.write(data);
             return true;
@@ -60,15 +104,15 @@ class TerminalManager {
     /**
      * Resize a terminal
      */
-    resizeTerminal(socketId, cols, rows) {
-        const terminal = this.terminals.get(socketId);
+    resizeTerminal(sessionKey, cols, rows) {
+        const terminal = this.terminals.get(sessionKey);
         if (terminal) {
             try {
                 terminal.resize(cols, rows);
-                console.log(`Resized terminal ${socketId} to ${cols}x${rows}`);
+                console.log(`Resized terminal ${sessionKey} to ${cols}x${rows}`);
                 return true;
             } catch (error) {
-                console.error(`Error resizing terminal ${socketId}:`, error);
+                console.error(`Error resizing terminal ${sessionKey}:`, error);
                 return false;
             }
         }
@@ -78,16 +122,16 @@ class TerminalManager {
     /**
      * Destroy a terminal session
      */
-    destroyTerminal(socketId) {
-        const terminal = this.terminals.get(socketId);
+    destroyTerminal(sessionKey) {
+        const terminal = this.terminals.get(sessionKey);
         if (terminal) {
             try {
                 terminal.kill();
-                this.terminals.delete(socketId);
-                console.log(`Destroyed terminal for socket ${socketId}`);
+                this.terminals.delete(sessionKey);
+                console.log(`Destroyed terminal for session ${sessionKey}`);
                 return true;
             } catch (error) {
-                console.error(`Error destroying terminal ${socketId}:`, error);
+                console.error(`Error destroying terminal ${sessionKey}:`, error);
                 return false;
             }
         }
@@ -97,8 +141,8 @@ class TerminalManager {
     /**
      * Get a terminal instance
      */
-    getTerminal(socketId) {
-        return this.terminals.get(socketId);
+    getTerminal(sessionKey) {
+        return this.terminals.get(sessionKey);
     }
 
     /**
@@ -106,11 +150,11 @@ class TerminalManager {
      */
     destroyAll() {
         console.log(`Cleaning up ${this.terminals.size} terminals`);
-        for (const [socketId, terminal] of this.terminals.entries()) {
+        for (const [sessionKey, terminal] of this.terminals.entries()) {
             try {
                 terminal.kill();
             } catch (error) {
-                console.error(`Error killing terminal ${socketId}:`, error);
+                console.error(`Error killing terminal ${sessionKey}:`, error);
             }
         }
         this.terminals.clear();

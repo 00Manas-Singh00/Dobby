@@ -2,12 +2,11 @@
  * components/workspace/EditorWorkspace.jsx
  * Orchestrates the full editor area:
  *   - FileExplorer (left panel)
- *   - EditorTabs + CodeEditor (center)
+ *   - EditorTabs + CodeEditor (center), one CodeEditor per open file
  *   - ExecutionPanel (below editor, shown after running)
- *   - AIPanel (right panel, shown when AI is active)
  *   - Terminal (bottom)
  *
- * Owns code execution state (useCodeExecution) and AI state (useAI).
+ * Owns code execution state (useCodeExecution).
  */
 
 import React, { useState, useCallback } from 'react';
@@ -74,6 +73,7 @@ const EditorWorkspace = ({ moduleId, socket, roomId, username, theme = 'vs-dark'
                                     socket={socket}
                                     roomId={roomId}
                                     username={username}
+                                    fileId={file.id}
                                     theme={theme}
                                     isRunning={isRunning}
                                     onRun={handleRun}
