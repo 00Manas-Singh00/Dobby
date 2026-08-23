@@ -1,2 +1,9 @@
+node_modules/
 .env
-node_modules
+.env.local
+.DS_Store
+dist/
+*.log
+
+# Runtime Yjs document store (LevelDB) — regenerated, never committed
+server/.yjs-persistence/
