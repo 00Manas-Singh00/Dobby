@@ -4,17 +4,15 @@
  * Rendered below the editor when execution completes or is in progress.
  */
 
-import React, { useRef, useEffect } from 'react';
+import { useRef, useEffect } from 'react';
 import {
-    Play,
     X,
     CheckCircle,
     XCircle,
     Clock,
     Terminal,
     AlertTriangle,
-    Loader2,
-} from 'lucide-react';
+    Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /**

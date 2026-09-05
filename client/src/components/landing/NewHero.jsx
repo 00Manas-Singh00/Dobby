@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useRef } from 'react';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 import { motion } from 'framer-motion';
@@ -22,8 +22,7 @@ export const NewHero = ({ onLaunch }) => {
         })
         .from(subtitleRef.current, {
             y: 30,
-            opacity: 0,
-        }, "-=1")
+            opacity: 0 }, "-=1")
         .from(ctaRef.current, {
             scale: 0.8,
             opacity: 0,

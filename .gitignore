@@ -7,3 +7,14 @@ dist/
 
 # Runtime Yjs document store (LevelDB) — regenerated, never committed
 server/.yjs-persistence/
+
+# SQLite store (accounts, rooms, memberships, invites) — never committed
+server/.data/
+
+# End-to-end test stores — recreated by every run
+server/.e2e/
+
+# Playwright output
+client/test-results/
+client/playwright-report/
+client/blob-report/

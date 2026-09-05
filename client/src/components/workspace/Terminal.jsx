@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Terminal as TerminalIcon, ChevronUp, ChevronDown } from 'lucide-react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
@@ -24,14 +24,17 @@ const TerminalComponent = () => {
     const currentDraftRef = useRef('');
     const hadPreviousSessionRef = useRef(false);
 
-    const getTerminalKey = (suffix) => (roomId ? `dobby_room_${roomId}_terminal_${suffix}` : null);
+    const getTerminalKey = useCallback(
+        (suffix) => (roomId ? `dobby_room_${roomId}_terminal_${suffix}` : null),
+        [roomId]
+    );
 
     useEffect(() => {
         if (!roomId) return;
         const savedDraft = sessionStorage.getItem(getTerminalKey('draft')) || '';
         currentDraftRef.current = savedDraft;
         hadPreviousSessionRef.current = sessionStorage.getItem(getTerminalKey('had_session')) === 'true';
-    }, [roomId]);
+    }, [roomId, getTerminalKey]);
 
     // Initialize xterm.js
     useEffect(() => {
@@ -116,7 +119,7 @@ const TerminalComponent = () => {
             xtermRef.current = null;
             fitAddonRef.current = null;
         };
-    }, [terminalCollapsed, socket, roomId]);
+    }, [terminalCollapsed, socket, roomId, getTerminalKey]);
 
     // Handle socket events
     useEffect(() => {
@@ -128,7 +131,7 @@ const TerminalComponent = () => {
             }
         };
 
-        const handleReady = ({ message }) => {
+        const handleReady = () => {
             if (xtermRef.current) {
                 xtermRef.current.writeln('\x1b[1;36mTerminal ready. Type your commands here.\x1b[0m');
                 if (hadPreviousSessionRef.current) {
@@ -167,7 +170,7 @@ const TerminalComponent = () => {
             socket.off('terminal:exit', handleExit);
             socket.off('terminal:error', handleError);
         };
-    }, [socket]);
+    }, [socket, getTerminalKey]);
 
     // Handle resize events
     useEffect(() => {

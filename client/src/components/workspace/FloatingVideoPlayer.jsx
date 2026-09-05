@@ -1,11 +1,11 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Maximize2, Mic, MicOff, Video, VideoOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { cn } from '@/lib/utils';
 
-const FloatingVideoPlayer = ({ onExpand, socket, roomId, username }) => {
-    const { videoState, updateVideoMiniPlayerPosition, updateVideoMiniPlayerSize, toggleVideoMute, toggleVideoCamera } = useWorkspace();
+const FloatingVideoPlayer = ({ onExpand }) => {
+    const { videoState, updateVideoMiniPlayerPosition, toggleVideoMute, toggleVideoCamera } = useWorkspace();
     const [isDragging, setIsDragging] = useState(false);
     const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
     const playerRef = useRef(null);

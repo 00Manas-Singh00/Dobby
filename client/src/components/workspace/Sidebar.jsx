@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Code2, Video, PenTool, MessageSquare, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Code2, Video, PenTool, MessageSquare, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const MODULES = [
@@ -14,8 +14,7 @@ const COLOR_CLASSES = {
     purple: 'bg-[#FF4081] text-black border-4 border-black neo-shadow-sm',
     green: 'bg-[#FFEB3B] text-black border-4 border-black neo-shadow-sm',
     orange: 'bg-white text-black border-4 border-black neo-shadow-sm',
-    pink: 'bg-[#FF4081] text-black border-4 border-black neo-shadow-sm',
-};
+    pink: 'bg-[#FF4081] text-black border-4 border-black neo-shadow-sm' };
 
 const Sidebar = ({ activeModule, onModuleChange, isCollapsed, width, onWidthChange, onToggleCollapse }) => {
     const [isResizing, setIsResizing] = useState(false);

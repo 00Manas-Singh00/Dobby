@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -64,14 +64,9 @@ const Chat = ({ socket, roomId, username }) => {
     const sendMessage = (e) => {
         e.preventDefault();
         if (input.trim() && socket) {
-            const msgData = {
-                message: input,
-                roomId,
-                username,
-                timestamp: new Date().toISOString()
-            };
-
-            socket.emit("send_message", msgData);
+            // Author and timestamp are assigned by the server from the
+            // authenticated socket — sending them here would be ignored.
+            socket.emit("send_message", { message: input, roomId });
             setInput("");
             if (roomId) {
                 sessionStorage.removeItem(`dobby_room_${roomId}_chat_draft`);

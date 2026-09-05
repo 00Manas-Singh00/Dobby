@@ -1,7 +1,7 @@
 # 01 — Product Overview
 
 **Project:** Dobby — a cloud-based IDE for pair programming
-**Status:** v0.9, pre-auth
+**Status:** v0.9, authenticated (Phase 1 complete)
 
 ---
 
@@ -65,24 +65,23 @@ product decision, not a temporary limit — see [ADR-006](./07-adrs.md#adr-006).
 
 These are the things that would block calling Dobby v1, in rough priority order:
 
-1. **No authentication.** Room URLs are unguessable UUIDs, which is
-   security-by-obscurity, not security. This gates everything else.
-2. **The file explorer is a mock.** [`FileExplorer.jsx`](../client/src/components/workspace/FileExplorer.jsx)
+1. **The file explorer is a mock.** [`FileExplorer.jsx`](../client/src/components/workspace/FileExplorer.jsx)
    renders a hardcoded tree; opening a file creates a placeholder buffer rather
    than reading anything real. Users can edit and share files, but not create,
    rename, or delete them.
-3. **Chat and whiteboard aren't durable.** Both live in server memory and are
+2. **Chat and whiteboard aren't durable.** Both live in server memory and are
    cleared 30 minutes after a room empties. A refresh mid-session is fine; a
    server restart is not.
-4. **No tests.** Every change is verified by hand.
-5. **Single-node only.** All room state is in-process, so the server cannot be
-   scaled horizontally.
+3. **Single-node only.** Socket.IO rooms, chat, and the rate limiters are all
+   in-process, so the server cannot be scaled horizontally.
+4. **Identity is minimal.** Accounts exist, but there is no email verification,
+   password reset, or MFA. Account recovery is a manual database operation.
 
 ## 6. Success criteria
 
 Dobby is doing its job when two people can:
 
-- open a shared URL and be editing the same file within five seconds;
+- open a shared invite link and be editing the same file within five seconds;
 - type in the same file simultaneously without losing characters or having
   cursors jump;
 - run the code and see the same output;

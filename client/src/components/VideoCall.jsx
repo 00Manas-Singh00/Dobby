@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Peer from 'simple-peer';
 import { Button } from "@/components/ui/button";
 import { Mic, MicOff, Video, VideoOff, MonitorUp } from 'lucide-react';
@@ -11,6 +11,38 @@ const VideoCall = ({ socket, roomId, username }) => {
 
     const userVideo = useRef();
     const peersRef = useRef([]);
+
+    function createPeer(userToSignal, callerID, stream) {
+        const peer = new Peer({
+            initiator: true,
+            trickle: false,
+            stream,
+        });
+
+        peer.on("signal", signal => {
+            // roomId scopes the relay: the server only forwards a signal to a
+            // socket that is in the same room as the sender.
+            socket.emit("sending signal", { roomId, userToSignal, callerID, signal });
+        });
+
+        return peer;
+    }
+
+    function addPeer(incomingSignal, callerID, stream) {
+        const peer = new Peer({
+            initiator: false,
+            trickle: false,
+            stream,
+        });
+
+        peer.on("signal", signal => {
+            socket.emit("returning signal", { roomId, signal, callerID });
+        });
+
+        peer.signal(incomingSignal);
+
+        return peer;
+    }
 
     useEffect(() => {
         if (!socket) return;
@@ -65,36 +97,6 @@ const VideoCall = ({ socket, roomId, username }) => {
             socket.off("receiving returned signal");
         };
     }, []);
-
-    function createPeer(userToSignal, callerID, stream) {
-        const peer = new Peer({
-            initiator: true,
-            trickle: false,
-            stream,
-        });
-
-        peer.on("signal", signal => {
-            socket.emit("sending signal", { userToSignal, callerID, signal });
-        });
-
-        return peer;
-    }
-
-    function addPeer(incomingSignal, callerID, stream) {
-        const peer = new Peer({
-            initiator: false,
-            trickle: false,
-            stream,
-        });
-
-        peer.on("signal", signal => {
-            socket.emit("returning signal", { signal, callerID });
-        });
-
-        peer.signal(incomingSignal);
-
-        return peer;
-    }
 
     const toggleMute = () => {
         if (stream) {
@@ -194,7 +196,7 @@ const VideoCall = ({ socket, roomId, username }) => {
 
 const VideoItem = ({ peer, index }) => {
     const ref = useRef();
-    const [userName, setUserName] = useState(`Participant ${index + 1}`);
+    const [userName] = useState(`Participant ${index + 1}`);
 
     useEffect(() => {
         peer.on("stream", stream => {

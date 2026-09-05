@@ -170,7 +170,10 @@ message, confine each session to a scratch directory under
 - *A command allowlist.* Trivially bypassed by any shell, and it would break the
   interactive use (`vim`, REPLs) that justifies a PTY.
 
-**Status.** Accepted as an interim position. Supersede once containers land.
+**Status.** **Superseded by [ADR-011](#adr-011)**, which replaces confinement
+with a per-session container. The membership gate, server-derived session
+identity, and `ENABLE_TERMINAL` switch from this decision all still stand; only
+the "not sandboxed" position is superseded.
 
 ---
 
@@ -256,3 +259,126 @@ visibility with CSS.
   canvas and terminal state.
 
 **Status.** Accepted.
+
+---
+
+## ADR-009 — Email/password accounts with JWT, not OAuth
+<a id="adr-009"></a>
+
+**Context.** Phase 1 needed identity before anything else could be gated on it.
+The realistic options were a third-party provider (GitHub OAuth is the obvious
+fit for a developer tool) or self-contained accounts.
+
+**Decision.** Email and password, bcrypt-hashed at cost 12, with a 15-minute JWT
+access token and a 30-day rotating refresh token stored hashed in SQLite.
+
+**Consequences.**
+- (+) No third-party registration, client secret, or callback route, so the auth
+  path can be exercised end to end in development and in tests — which matters
+  because Phase 2 has to test exactly this.
+- (+) Access tokens verify statelessly, which is what makes it cheap to check
+  them on every socket handshake and every Yjs namespace connection.
+- (+) Refresh tokens stay revocable, so a session can be ended server-side —
+  the property a pure-JWT scheme gives up.
+- (−) Dobby now stores passwords, which is a liability OAuth avoids entirely.
+- (−) No email verification, password reset, or MFA. Account recovery is a
+  manual database operation. This is the largest known gap in the identity
+  system and it is deliberate scope, not an oversight.
+- (−) Tokens live in `localStorage` and are therefore readable by any script on
+  the page. Acceptable while no user content is rendered as HTML; `HttpOnly`
+  cookies would trade this for CSRF handling.
+
+**Alternatives rejected.**
+- *GitHub OAuth.* Better security properties and a natural fit for the audience,
+  but it cannot be run without real credentials, which would leave the auth path
+  untestable at exactly the moment tests are the next phase. A good later
+  addition alongside passwords rather than instead of them.
+- *Sessions in a cookie with server-side storage.* Simpler to reason about, but
+  every socket and Yjs namespace connection would need a store lookup, and the
+  cross-origin client/server split makes cookies awkward.
+
+**Status.** Accepted. Adding OAuth as a second provider is compatible with this.
+
+---
+
+## ADR-010 — SQLite for identity, alongside LevelDB for documents
+<a id="adr-010"></a>
+
+**Context.** Accounts, rooms, memberships, and invites need durable, queryable,
+relational storage. Dobby already had LevelDB, but a key-value store is a poor
+fit for "which rooms is this user a member of".
+
+**Decision.** SQLite via `better-sqlite3`, in `server/.data/`, holding users,
+rooms, memberships, invites, and hashed refresh tokens. Yjs document state stays
+in LevelDB.
+
+**Consequences.**
+- (+) Zero operational surface, matching the reason LevelDB was chosen
+  ([ADR-007](#adr-007)): no service to run, one file to back up.
+- (+) The synchronous API needs no connection pooling and no async plumbing
+  through the socket handlers, where authorization checks happen on every event.
+- (+) Foreign keys and transactions make "a room and its owner membership appear
+  together" enforceable rather than conventional.
+- (−) Two stores with different shapes and different delete paths, which is why
+  room deletion has to coordinate across both — and why the retention sweep
+  deletes documents before the room row, so a crash leaves a retry rather than
+  an orphan.
+- (−) Single-writer, so this is one more thing Phase 4 has to replace.
+- (−) A native module, so the server no longer installs cleanly on a host
+  without build tools.
+
+**Alternatives rejected.**
+- *Postgres.* Production-shaped, and needed eventually for Phase 4. Rejected for
+  now because it adds a service dependency to local development before anything
+  requires it.
+- *Reuse LevelDB.* Would avoid a second store, but membership queries would
+  become manual index maintenance — precisely the work a relational engine does
+  correctly.
+
+**Status.** Accepted for single-node. Reopen with Phase 4, together with
+[ADR-007](#adr-007).
+
+---
+
+## ADR-011 — The terminal runs in a container, and fails closed
+<a id="adr-011"></a>
+
+**Context.** [ADR-005](#adr-005) recorded confinement — a scratch `cwd` and an
+allowlisted environment — as an interim position, and said to supersede it once
+containers landed. With authentication in place, the objection that "a sandboxed
+terminal is still an unauthenticated one" no longer applies.
+
+**Decision.** Each session's PTY is a `docker run` process rather than a shell:
+`--cpus 0.5`, `--memory 256m` with a matching `--memory-swap`, `--pids-limit
+128`, `--network none`, `--cap-drop=ALL`, `--security-opt no-new-privileges`,
+`--user 1000:1000`, `--read-only`, with a `noexec` tmpfs at `/tmp` and the
+per-session workspace bind-mounted at `/workspace`. If Docker is unreachable,
+terminal creation **fails**.
+
+**Consequences.**
+- (+) node-pty still owns a real TTY, so `vim`, colors, and interactive prompts
+  work exactly as before — the property that justified a PTY in the first place.
+- (+) A `while true` loop or a fork bomb now costs half a CPU and 128 processes
+  rather than the host.
+- (+) `--network none` means a shell cannot scan the internal network or
+  exfiltrate what it reads, which is the control that most changes the threat
+  model.
+- (−) Docker becomes a deployment dependency for the terminal.
+- (−) Container startup adds latency to opening a terminal that spawning a shell
+  did not have.
+- (−) Still not a hard boundary: no seccomp profile beyond Docker's default and
+  no user-namespace remapping, so a container escape is a container escape.
+
+**Alternatives rejected.**
+- *Silently fall back to a host shell when Docker is missing.* Rejected firmly:
+  that turns an infrastructure problem into an unsandboxed shell handed to
+  whoever is in the room. Failing closed makes the degraded state visible.
+  `TERMINAL_ISOLATION=host` remains available as an explicit, logged choice for
+  local development.
+- *gVisor or Firecracker.* Stronger isolation, but a much heavier operational
+  dependency than a project at this stage can justify.
+- *One container per room rather than per session.* Simpler lifecycle, but the
+  two occupants would share a filesystem and a process table, and terminal
+  sessions are already keyed per user so that a refresh reattaches.
+
+**Status.** Accepted. Supersedes the sandboxing position of [ADR-005](#adr-005).

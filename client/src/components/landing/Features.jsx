@@ -1,6 +1,5 @@
-import React from 'react';
 import { motion } from 'framer-motion';
-import { Code2, Globe, Shield, Sparkles, Users, Zap } from 'lucide-react';
+import { Code2, Globe, Shield, Users, Zap } from 'lucide-react';
 
 const features = [
     {

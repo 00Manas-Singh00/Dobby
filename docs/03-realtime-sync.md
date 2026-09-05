@@ -49,7 +49,8 @@ Monaco model
    Y.Text  ("monaco" key inside the Y.Doc)
      ▲  ▼
    Y.Doc  ──── y-socket.io SocketIOProvider ────► server YSocketIO ──► LevelDB
-                        │
+                        │                              ▲
+                        │                    membership check on the namespace
                    awareness (cursors, names, colors) — ephemeral, never stored
 ```
 
@@ -65,6 +66,40 @@ room-scoped name would give every tab the same `Y.Text` and every file would
 show identical content. Room-plus-file scoping also means LevelDB persists each
 file separately, and awareness naturally scopes cursors to the file the other
 person is actually looking at.
+
+### 3.1b Document namespaces are authorized separately
+
+This is the non-obvious part of the wiring. `y-socket.io` does not share the
+main Socket.IO connection: it opens a **dynamic namespace** per document, named
+`/yjs|<roomId>:<fileId>`. Namespace connections do not pass through the server's
+main connection middleware, so the handshake authentication on `io.use(...)`
+does not apply to them. Left alone, an authenticated user could open any room's
+document simply by naming its namespace — the id is all the addressing there is.
+
+`yjsService` therefore registers its own middleware on the parent namespace
+after `initialize()`. Socket.IO copies a parent namespace's middleware onto each
+child as the child is created, which is what makes one registration cover
+documents that do not exist yet. The check verifies the access token — the
+provider passes it as `auth: { token }` — and then confirms room membership,
+taking the room id from `socket.nsp.name`, **not** from the handshake payload. A
+client that supplied its own room could otherwise present one it belongs to
+while opening a document from another.
+
+### 3.1c The BroadcastChannel path is disabled
+
+`y-socket.io` will, by default, also sync provider instances to each other over
+a `BroadcastChannel` keyed on `${url}/${roomName}`. That channel reaches every
+browsing context on the same origin **without touching the server**, and so
+without passing the membership check in 3.1b — it is a second sync path that no
+authorization applies to.
+
+`useYjsEditor` passes `disableBc: true`. The feature is an optimization for one
+user with several tabs open; in a two-person room it saves nothing worth having
+an unauthorized sync path for, and the server relays between tabs perfectly well.
+
+This is worth knowing if you ever test convergence with two providers in one
+process: leave BroadcastChannel on and they will converge through it, which
+looks like the server working when it is not.
 
 ### 3.2 The editor instance must be state, not a ref
 

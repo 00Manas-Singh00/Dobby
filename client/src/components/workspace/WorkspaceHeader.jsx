@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
-import { Copy, Check, LogOut, Users, ChevronDown, Palette } from 'lucide-react';
+import { useState } from 'react';
+import { Check, LogOut, Users, ChevronDown, Palette, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { createInvite, inviteUrl } from '@/services/roomService';
 
 const themes = [
     { value: "vs-dark", label: "Dark" },
@@ -12,20 +13,27 @@ const themes = [
     { value: "hc-black", label: "High Contrast" },
 ];
 
-const WorkspaceHeader = ({ roomId, username, users = [], theme = 'vs-dark', onThemeChange }) => {
+const WorkspaceHeader = ({ roomId, roomName, username, users = [], theme = 'vs-dark', onThemeChange }) => {
     const [copied, setCopied] = useState(false);
     const [showUsers, setShowUsers] = useState(false);
     const navigate = useNavigate();
 
-    const copyRoomId = () => {
-        navigator.clipboard.writeText(roomId);
-        setCopied(true);
-        toast.success('Room ID copied to clipboard!');
-        setTimeout(() => setCopied(false), 2000);
+    // The room id is no longer a credential, so copying it would share nothing.
+    // Inviting someone means minting a single-use token for them.
+    const copyInviteLink = async () => {
+        try {
+            const invite = await createInvite(roomId);
+            await navigator.clipboard.writeText(inviteUrl(invite.token));
+            setCopied(true);
+            toast.success('Invite link copied — single use, expires in 24 hours.');
+            setTimeout(() => setCopied(false), 2000);
+        } catch (error) {
+            toast.error(error.message || 'Could not create an invite.');
+        }
     };
 
     const handleLeave = () => {
-        navigate('/');
+        navigate('/home');
         toast.info('You left the room');
     };
 
@@ -35,17 +43,20 @@ const WorkspaceHeader = ({ roomId, username, users = [], theme = 'vs-dark', onTh
             <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2 bg-[#f8f9fa] border-4 border-black neo-shadow-sm px-4 py-2 rounded-none">
                     <span className="text-sm text-black font-black uppercase tracking-widest">Room:</span>
-                    <code className="text-sm text-black font-bold bg-[#FFEB3B] px-2 py-1 border-2 border-black">{roomId.slice(0, 8)}...</code>
+                    <code className="text-sm text-black font-bold bg-[#FFEB3B] px-2 py-1 border-2 border-black max-w-[16rem] truncate">
+                        {roomName || `${roomId.slice(0, 8)}…`}
+                    </code>
                     <Button
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8 hover:bg-[#00E5FF] border-2 border-transparent hover:border-black rounded-none transition-none ml-2"
-                        onClick={copyRoomId}
+                        onClick={copyInviteLink}
+                        title="Copy an invite link"
                     >
                         {copied ? (
                             <Check size={18} className="text-black stroke-[3]" />
                         ) : (
-                            <Copy size={18} className="text-black stroke-[3]" />
+                            <Share2 size={18} className="text-black stroke-[3]" />
                         )}
                     </Button>
                 </div>

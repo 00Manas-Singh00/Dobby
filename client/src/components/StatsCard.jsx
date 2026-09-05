@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 
 const StatsCard = ({ icon: Icon, label, value, color = "blue", delay = 0 }) => {

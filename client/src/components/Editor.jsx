@@ -8,17 +8,13 @@
  *  - Sync status indicator
  */
 
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import Editor from '@monaco-editor/react';
 import {
     Play,
     Loader2,
     ChevronDown,
-    Check,
-    Sparkles,
-    Wrench,
-    Lightbulb,
-} from 'lucide-react';
+    Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { LANGUAGES, isExecutable } from '@/constants/languageMap';
 import { useYjsEditor } from '@/hooks/useYjsEditor';
@@ -30,8 +26,7 @@ const CodeEditor = ({
     fileId = 'default',
     theme = 'vs-dark',
     isRunning = false,
-    onRun,
-}) => {
+    onRun }) => {
     const [language, setLanguage] = useState(() => {
         if (!roomId) return 'javascript';
         return localStorage.getItem(`dobby_room_${roomId}_language`) || 'javascript';
@@ -126,7 +121,7 @@ const CodeEditor = ({
             blurDisposable.dispose();
             setEditorInstance(null);
         });
-    }, [language]);
+    }, [language, getViewStateKey]);
 
     useEffect(() => {
         if (!editorRef.current || !hasRestoredViewStateRef.current) return;
@@ -259,8 +254,7 @@ const CodeEditor = ({
                         tabSize: 4,
                         renderLineHighlight: 'all',
                         bracketPairColorization: { enabled: true },
-                        contextmenu: true,
-                    }}
+                        contextmenu: true }}
                 />
             </div>
         </div>

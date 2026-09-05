@@ -1,6 +1,6 @@
-import React, { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { PenTool, Eraser, Trash2, Circle, Square, Minus, Grid3x3, Undo, Redo } from 'lucide-react';
+import { PenTool, Eraser, Trash2, Grid3x3 } from 'lucide-react';
 
 const Whiteboard = ({ socket, roomId }) => {
     const canvasRef = useRef(null);
@@ -34,6 +34,48 @@ const Whiteboard = ({ socket, roomId }) => {
             // Ignore quota/storage errors.
         }
     };
+    const drawGrid = () => {
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        const gridSize = 30;
+
+        ctx.strokeStyle = '#e5e7eb20';
+        ctx.lineWidth = 1;
+
+        for (let x = 0; x < canvas.width; x += gridSize) {
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, canvas.height);
+            ctx.stroke();
+        }
+
+        for (let y = 0; y < canvas.height; y += gridSize) {
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(canvas.width, y);
+            ctx.stroke();
+        }
+    };
+
+    const draw = (prev, curr, strokeColor, strokeWidth, emit = true) => {
+        const ctx = canvasRef.current.getContext('2d');
+        ctx.beginPath();
+        ctx.moveTo(prev.x, prev.y);
+        ctx.lineTo(curr.x, curr.y);
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = strokeWidth;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+
+        if (emit && socket) {
+            socket.emit("draw", {
+                roomId,
+                data: { prevPos: prev, currPos: curr, color: strokeColor, lineWidth: strokeWidth }
+            });
+        }
+    };
+
 
     const colorPresets = [
         { color: "#3b82f6", name: "Blue" },
@@ -105,47 +147,7 @@ const Whiteboard = ({ socket, roomId }) => {
         };
     }, [socket, roomId, showGrid]);
 
-    const drawGrid = () => {
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d');
-        const gridSize = 30;
 
-        ctx.strokeStyle = '#e5e7eb20';
-        ctx.lineWidth = 1;
-
-        for (let x = 0; x < canvas.width; x += gridSize) {
-            ctx.beginPath();
-            ctx.moveTo(x, 0);
-            ctx.lineTo(x, canvas.height);
-            ctx.stroke();
-        }
-
-        for (let y = 0; y < canvas.height; y += gridSize) {
-            ctx.beginPath();
-            ctx.moveTo(0, y);
-            ctx.lineTo(canvas.width, y);
-            ctx.stroke();
-        }
-    };
-
-    const draw = (prev, curr, strokeColor, strokeWidth, emit = true) => {
-        const ctx = canvasRef.current.getContext('2d');
-        ctx.beginPath();
-        ctx.moveTo(prev.x, prev.y);
-        ctx.lineTo(curr.x, curr.y);
-        ctx.strokeStyle = strokeColor;
-        ctx.lineWidth = strokeWidth;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.stroke();
-
-        if (emit && socket) {
-            socket.emit("draw", {
-                roomId,
-                data: { prevPos: prev, currPos: curr, color: strokeColor, lineWidth: strokeWidth }
-            });
-        }
-    };
 
     const handleMouseDown = (e) => {
         const { offsetX, offsetY } = e.nativeEvent;
@@ -182,8 +184,6 @@ const Whiteboard = ({ socket, roomId }) => {
     const toggleGrid = () => {
         const newShowGrid = !showGrid;
         setShowGrid(newShowGrid);
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d');
         if (newShowGrid) {
             drawGrid();
         }

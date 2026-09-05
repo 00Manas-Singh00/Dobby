@@ -8,7 +8,7 @@ import { useEffect, useState, useRef } from 'react';
 import * as Y from 'yjs';
 import { SocketIOProvider } from 'y-socket.io';
 import { MonacoBinding } from 'y-monaco';
-import { API_BASE_URL } from '@/services/apiClient';
+import { API_BASE_URL, getAccessToken } from '@/services/apiClient';
 
 /**
  * @param {string} roomId
@@ -37,9 +37,19 @@ export function useYjsEditor(roomId, editorInstance, username, fileId = 'default
         // The Yjs room name is room + file, so each tab syncs (and persists to
         // LevelDB) independently, and awareness/cursors scope to that file.
         const yRoomName = `${roomId}:${fileId}`;
+        // Yjs connects to its own namespace, which does not inherit the main
+        // socket's authentication — it carries the access token itself, and the
+        // server checks room membership against the namespace name.
         const provider = new SocketIOProvider(API_BASE_URL, yRoomName, ydoc, {
             autoConnect: true,
-            auth: { username },
+            auth: { token: getAccessToken() },
+            // y-socket.io also syncs peers over a BroadcastChannel keyed on
+            // `${url}/${roomName}`, which reaches every same-origin browsing
+            // context *without touching the server* — and therefore without
+            // passing the membership check. It is an optimization for multiple
+            // tabs of one user; for a two-person room it saves nothing worth
+            // having a second, unauthorized sync path for.
+            disableBc: true,
         });
         providerRef.current = provider;
 

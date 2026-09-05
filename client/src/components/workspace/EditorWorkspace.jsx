@@ -9,7 +9,7 @@
  * Owns code execution state (useCodeExecution).
  */
 
-import React, { useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import ResizablePanel from '../common/ResizablePanel';
 import FileExplorer from './FileExplorer';
@@ -19,7 +19,7 @@ import ExecutionPanel from './ExecutionPanel';
 import CodeEditor from '../Editor';
 import { useCodeExecution } from '@/hooks/useCodeExecution';
 
-const EditorWorkspace = ({ moduleId, socket, roomId, username, theme = 'vs-dark' }) => {
+const EditorWorkspace = ({ socket, roomId, username, theme = 'vs-dark' }) => {
     const { editorState, updateFileExplorerWidth } = useWorkspace();
 
     // ── Code Execution ───────────────────────────────────────────────────────

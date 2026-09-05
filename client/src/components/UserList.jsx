@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Crown, Circle } from 'lucide-react';
 
-const UserList = ({ socket, roomId }) => {
+const UserList = ({ socket }) => {
     const [users, setUsers] = useState([]);
 
     useEffect(() => {
