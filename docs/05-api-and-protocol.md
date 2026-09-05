@@ -75,6 +75,92 @@ refused once the room holds its maximum of two members. Redeeming one you have
 already used is idempotent rather than an error, so re-opening a shared link
 works. The shareable URL is `/invite/<token>` on the client.
 
+A newly created room is seeded with one file (`main.js`), because an explorer
+with nothing in it is indistinguishable from a broken one.
+
+## 2b. Files
+
+Mounted under the room router and behind the same membership gate, so a
+non-member gets the same `404` as for the room itself. Both members can create,
+rename, move, and delete — a room is shared, not owned per file.
+
+**These endpoints carry structure only. A file's content is the Yjs document
+`<roomId>:<fileId>`** (see [03](./03-realtime-sync.md)), so nothing here is
+written on a keystroke.
+
+| Endpoint | Body | Returns |
+|---|---|---|
+| `GET /api/rooms/:roomId/files` | — | `{ files: FileNode[] }` — roots, with folders nesting their `children` |
+| `POST /api/rooms/:roomId/files` | `{ name, type?, parentId? }` | `{ file }`. `type` is `file` (default) or `folder`; `parentId` null/absent means the root |
+| `PATCH /api/rooms/:roomId/files/:fileId` | `{ name?, parentId? }` | `{ file }` |
+| `DELETE /api/rooms/:roomId/files/:fileId` | — | `{ removed: string[] }` — the node and everything under it |
+
+```ts
+type FileNode = {
+  id: string;              // uuid v4; also the second half of the document name
+  roomId: string;
+  parentId: string | null; // null = root
+  name: string;
+  type: 'file' | 'folder';
+  language: string | null; // inferred from the extension; null for a folder
+  createdAt: string;
+  updatedAt: string;
+  children?: FileNode[];   // folders only
+};
+```
+
+`PATCH` distinguishes an **absent** `parentId` from an explicit `null`: absent
+means "leave it where it is", `null` means "move it to the root". Treating the
+two the same would silently move every rename to the top of the tree.
+
+| Status | Meaning |
+|---|---|
+| 400 | A name that is empty, over 120 characters, reserved (`.`/`..`), or containing a path separator or control character; an unknown `type`; a `PATCH` body asking for nothing; a folder moved inside itself |
+| 404 | No such file *in this room* — including a `parentId` belonging to another room, which is indistinguishable from one that does not exist |
+| 409 | A sibling already has that name (case-insensitively), or the room is at `MAX_FILES_PER_ROOM` |
+
+**Names are a single path segment, never a path.** Rejecting the separator is
+what keeps `parentId` the only expression of hierarchy — a name of
+`../secrets` would otherwise be a second, contradictory one.
+
+Deleting a folder removes its whole subtree, and the response names every id so
+the client can close the matching tabs. Server-side each of those ids also loses
+its Yjs document and its snapshots. The row goes first and the content follows:
+a failure after the row is gone leaves orphaned state for the retention sweep,
+whereas the reverse order would leave a file in the tree whose contents had been
+erased.
+
+## 2c. Document history
+
+| Endpoint | Returns | Notes |
+|---|---|---|
+| `GET …/files/:fileId/snapshots` | `{ path, snapshots: Snapshot[] }` | Newest first. Metadata only — never the stored blob |
+| `POST …/files/:fileId/snapshots` | `{ snapshot, unchanged }` | Snapshot now. `snapshot` is `null` and `unchanged` true when the document has not moved since the last one |
+| `GET …/files/:fileId/snapshots/:id` | `{ snapshot, text }` | The text that snapshot holds, for a preview |
+| `POST …/files/:fileId/snapshots/:id/restore` | `{ snapshot, changed }` | Rewrites the document to that state |
+
+```ts
+type Snapshot = {
+  id: string;
+  roomId: string;
+  docName: string;   // `<roomId>:<fileId>`
+  size: number;      // bytes of encoded Yjs state
+  createdAt: string;
+};
+```
+
+Snapshots are also taken automatically every `SNAPSHOT_INTERVAL_MS` (5 minutes)
+for every open document, skipping any whose state vector has not changed;
+`SNAPSHOTS_PER_DOCUMENT` (20) are kept and older ones are dropped.
+
+**Restore does not return the new content, and the client does not apply it.**
+The server rewrites the live Yjs document, and every open editor — including the
+caller's — receives that as an ordinary remote edit through the binding it
+already has. That is also why a restore is safe mid-session: it is expressed as
+a new edit rather than a replacement, so a partner typing through one keeps
+their characters and both sides converge. The document is snapshotted
+immediately before being overwritten, so a restore is itself undoable.
+
 ## 3. Execution
 
 ### `POST /api/execute`
@@ -122,6 +208,25 @@ first fetch fails; the cache is cleared on failure so the next call retries.
 Liveness probe, and the only unauthenticated endpoint.
 `200 → { status: "ok", time: "<ISO8601>" }`.
 
+It deliberately reveals nothing else — not the node id, not a version. Adding
+the node id was considered for debugging a load balancer from outside and
+rejected: this is the one anonymous endpoint, and it should not become a way to
+enumerate the fleet.
+
+### `GET /metrics`
+Prometheus exposition format. **Not** part of the `/api` surface and not
+authenticated as a user — a scraper has no account, and giving it one would put
+a long-lived password in a Prometheus config. Two ways in, in order:
+
+1. `METRICS_TOKEN` set → `Authorization: Bearer <token>`, compared in constant
+   time. `401` otherwise.
+2. `METRICS_TOKEN` unset → loopback callers only. `403` otherwise, with a
+   message naming the variable, so a misconfigured scraper is a two-minute fix.
+
+The default is therefore closed to the network rather than open. Every value is
+per process; in a cluster, scrape each replica directly and sum. The full metric
+catalogue is in [08](./08-observability.md).
+
 ---
 
 ## 4. Socket.IO protocol
@@ -140,6 +245,21 @@ Yjs channels ride separate dynamic namespaces (`/yjs|<roomId>:<fileId>`) which
 carry the same token and are independently membership-gated; see
 [03](./03-realtime-sync.md).
 
+**Yjs connections carry a `?doc=<roomId>:<fileId>` query parameter.** It is a
+routing hint for the load balancer, which cannot see the namespace name because
+Socket.IO puts every namespace on the same `/socket.io/` path. It is a hint and
+nothing more: authorization and document ownership are both taken from the
+namespace the client actually connected to, so a forged value misroutes the
+liar and grants nothing.
+
+In a clustered deployment a Yjs handshake can be refused with an error carrying
+`data: { code: 'DOCUMENT_MOVED', owner: { nodeId, address } }`, meaning another
+replica holds this document's lease. This is a **routing** failure, not an
+authorization one, and it is retryable — the client backs off and reconnects.
+Socket.IO does not retry a refused handshake on its own, so the client does;
+see `client/src/services/yjsProvider.js` and
+[ADR-014](./07-adrs.md#adr-014).
+
 ### 4.1 Errors and quotas
 
 | Direction | Event | Payload |
@@ -151,8 +271,10 @@ trips a rate limit. The offending event is not broadcast. The client surfaces
 these as toasts.
 
 Every event is rate-limited by a per-socket token bucket sized to its expected
-traffic — chat at 2/s sustained, whiteboard strokes at 120/s, `terminal:create`
-at one per 10 seconds.
+traffic — chat at 2/s sustained, `terminal:input` at 200/s, `terminal:create` at
+one per 10 seconds. The bucket does not cover the Yjs namespaces, which carry
+code and whiteboard strokes; those are bounded by `SOCKET_MAX_PAYLOAD_BYTES` and
+by the membership check on the namespace instead.
 
 ### 4.2 Room lifecycle
 
@@ -211,33 +333,45 @@ identity.
 
 `receive_message` goes to the whole room **including the sender** — the sender
 renders from the echo rather than optimistically, so both clients display the
-server's canonical message id and timestamp. History is capped at the most recent
-`CHAT_HISTORY_LIMIT` (default 100) messages and held in memory only.
+server's canonical message id and timestamp. History lives in the
+`chat_messages` table, capped at the most recent `CHAT_HISTORY_LIMIT` (default
+100) messages per room; the cap is enforced by deleting rows in the same
+transaction as the insert, so it survives a restart along with the transcript.
 
-### 4.5 Whiteboard
+### 4.5 Files
 
 | Direction | Event | Payload |
 |---|---|---|
-| C→S | `draw` | `{ roomId, data }` |
-| S→room | `on draw` | `{ data }` |
-| C→S | `clear canvas` | `{ roomId }` |
-| S→room | `clear canvas` | — |
+| S→room | `files:changed` | `{ action: 'created' \| 'updated' \| 'restored', file }` or `{ action: 'deleted', fileIds: string[] }` |
+
+Emitted by the REST endpoints in §2b to everyone in the room, including the
+caller. It is a **notification, not a sync protocol**: the client refetches the
+tree rather than patching its copy, which keeps the database the single record of
+structure. A `deleted` payload additionally names the ids so open tabs for those
+files can be closed — that is the one thing a refetch cannot convey.
+
+### 4.6 Whiteboard
+
+**There are no whiteboard events.** Strokes are a `Y.Array` in the room's
+`<roomId>:__whiteboard__` document and travel the CRDT path described in
+[03 §4](./03-realtime-sync.md).
 
 ```ts
 type Stroke = {
   prevPos:   { x: number; y: number };
   currPos:   { x: number; y: number };
-  color?:    string;   // max 32 chars
-  lineWidth?: number;  // 0–200
+  color?:    string;
+  lineWidth?: number;
 };
 ```
 
-`data` is validated against that schema strictly and capped at
-`MAX_DRAW_PAYLOAD_BYTES` (64kb) before relay; it used to be forwarded verbatim
-with no cap. Strokes are still never stored, so a user who joins mid-session
-sees an empty canvas — [06 Roadmap](./06-roadmap.md) Phase 3 addresses that.
+The previous `draw` / `on draw` / `clear canvas` relay is gone. It validated and
+capped each stroke but stored none of them, so a user joining mid-session saw an
+empty canvas and a refresh lost the board. Clearing is `delete(0, length)` on the
+array rather than a message, which converges: a stroke drawn concurrently with a
+clear either survives or does not, consistently on both sides.
 
-### 4.6 WebRTC signaling
+### 4.7 WebRTC signaling
 
 The server is a pure relay here; media never touches it.
 
@@ -257,7 +391,7 @@ and the existing member answers. `simple-peer` handles ICE.
 destination socket is in that room. Previously a signal was relayed to any socket
 id the sender named. `signal` is capped at `MAX_SIGNAL_PAYLOAD_BYTES` (128kb).
 
-### 4.7 Terminal
+### 4.8 Terminal
 
 Disabled unless `ENABLE_TERMINAL=true`. Sandboxed in a container unless
 `TERMINAL_ISOLATION=host`; see [04 Security](./04-security-model.md) §4.
@@ -289,25 +423,30 @@ something reattaches first, and the container is force-removed.
 
 ## 5. Server state and its lifetimes
 
-Identity and room ownership are in SQLite; document content is in LevelDB.
-Everything in the table below is in-process and does not survive a restart.
+Identity, room ownership, the file tree, chat, and snapshots are in the
+relational store — SQLite, or Postgres when `DATABASE_URL` is set; document and
+whiteboard content is in LevelDB, or Redis when clustered. Everything in the table below is
+in-process and does not survive a restart.
 
 | Structure | Keyed by | Lifetime |
 |---|---|---|
 | `roomID_to_State_Map` | room id | 30 min after the room empties (`ROOM_STATE_TTL_MS`) |
-| `roomID_to_ChatHistory_Map` | room id | Same, capped at 100 messages |
 | `socketID_to_TerminalSession_Map` | socket id | Until disconnect or `leave room` |
 | `terminalSessionBindings` | `roomId:userId` | 15 min after the last socket detaches |
 
 `socketID_to_Users_Map` is gone: the authenticated user lives on `socket.data`,
-set by the handshake middleware.
+set by the handshake middleware. `roomID_to_ChatHistory_Map` is gone too — the
+transcript is a table now, so it survives the room emptying and the process
+restarting rather than only a refresh.
 
 Room-state cleanup re-checks that the room is genuinely empty before deleting,
-so a user who leaves and returns within the window keeps their chat history.
+so a user who leaves and returns within the window keeps the room's language
+selection.
 
 Durable state expires too. An hourly sweep deletes rooms idle for
 `ROOM_RETENTION_MS` (90 days) along with their documents, collects orphaned
-documents, and prunes expired invites and refresh tokens.
+documents and snapshots, and prunes expired invites and refresh tokens. Files,
+chat, and snapshots need no sweep of their own: they cascade from the room row.
 
 ---
 
@@ -321,8 +460,9 @@ with commentary:
 | `JWT_SECRET` | — | **Required**, 32+ chars. The server refuses to start without it |
 | `PORT` | `5001` | HTTP/Socket.IO port |
 | `ALLOWED_ORIGINS` | `http://localhost:5173` | Comma-separated exact origins |
-| `DATABASE_PATH` | `./.data/dobby.db` | SQLite: accounts, rooms, memberships, invites |
-| `YJS_PERSISTENCE_DIR` | `./.yjs-persistence` | LevelDB: document state |
+| `DATABASE_URL` | unset | Postgres for everything below. Unset means SQLite; set means `DATABASE_PATH` is ignored, and an unreachable server stops startup |
+| `DATABASE_PATH` | `./.data/dobby.db` | SQLite: accounts, rooms, invites, file tree, chat, snapshots |
+| `YJS_PERSISTENCE_DIR` | `./.yjs-persistence` | LevelDB: document and whiteboard content. Empty string runs the CRDT in memory |
 | `TRUST_PROXY` | unset | Proxy hops to trust for the client IP |
 | `ACCESS_TOKEN_TTL` | `15m` | Access token lifetime |
 | `REFRESH_TOKEN_TTL_MS` | `2592000000` | Refresh token lifetime (30 days) |
@@ -338,6 +478,11 @@ with commentary:
 | `TERMINAL_INACTIVITY_TTL_MS` | `900000` | Idle PTY reap delay |
 | `ROOM_STATE_TTL_MS` | `1800000` | Empty-room state reap delay |
 | `CHAT_HISTORY_LIMIT` | `100` | Retained messages per room |
+| `MAX_FILES_PER_ROOM` | `200` | Ceiling on tree size |
+| `MAX_TREE_DEPTH` | `12` | Ceiling on folder nesting |
+| `SNAPSHOT_INTERVAL_MS` | `300000` | How often open documents are snapshotted |
+| `SNAPSHOTS_PER_DOCUMENT` | `20` | Snapshots retained per document |
+| `MAX_SNAPSHOT_BYTES` | `1000000` | Documents larger than this are not snapshotted |
 | `INVITE_TTL_MS` | `86400000` | Invite lifetime (24 hours) |
 | `ROOM_RETENTION_MS` | `7776000000` | Idle-room deletion threshold (90 days) |
 | `RETENTION_SWEEP_INTERVAL_MS` | `3600000` | How often retention runs |

@@ -13,7 +13,6 @@ import { z } from 'zod';
 // ─── Limits ───────────────────────────────────────────────────────────────────
 export const LIMITS = {
     chatMessage: Number(process.env.MAX_CHAT_MESSAGE_CHARS || 4_000),
-    drawPayload: Number(process.env.MAX_DRAW_PAYLOAD_BYTES || 64_000),
     signalPayload: Number(process.env.MAX_SIGNAL_PAYLOAD_BYTES || 128_000),
     terminalInput: Number(process.env.MAX_TERMINAL_INPUT_BYTES || 8_000),
 };
@@ -46,6 +45,25 @@ export const redeemInviteSchema = z.object({
     token: z.string().min(1).max(500),
 });
 
+// A name is one path segment; fileService rejects separators and control
+// characters. The schema's job here is the size and shape cap, and to make
+// `parentId` explicitly nullable — the root is `null`, not a missing key, and
+// the difference decides whether a PATCH moves a node or only renames it.
+export const createFileSchema = z.object({
+    name: z.string().trim().min(1).max(120),
+    type: z.enum(['file', 'folder']).default('file'),
+    parentId: uuid.nullish(),
+});
+
+export const updateFileSchema = z
+    .object({
+        name: z.string().trim().min(1).max(120).optional(),
+        parentId: uuid.nullish(),
+    })
+    .refine((body) => body.name !== undefined || 'parentId' in body, {
+        message: 'Provide a name, a parentId, or both.',
+    });
+
 /** Express middleware factory: validates `req.body` and replaces it. */
 export function validateBody(schema) {
     return (req, res, next) => {
@@ -75,24 +93,11 @@ export const sendMessageSchema = z.object({
     message: z.string().trim().min(1).max(LIMITS.chatMessage),
 });
 
-// A single line segment between two canvas points. The server only relays
-// strokes, so this is a shape check rather than a semantic one — but it is
-// strict, because an unbounded relayed payload is the actual risk.
-const point = z.object({ x: z.number().finite(), y: z.number().finite() }).strict();
-
-export const drawSchema = z.object({
-    roomId: uuid,
-    data: z
-        .object({
-            prevPos: point,
-            currPos: point,
-            color: z.string().max(32).optional(),
-            lineWidth: z.number().finite().min(0).max(200).optional(),
-        })
-        .strict(),
-});
-
-export const clearCanvasSchema = z.object({ roomId: uuid });
+// NOTE: `draw` and `clear canvas` schemas were removed with the socket relay
+// they validated. Whiteboard strokes are now a `Y.Array` inside the room's
+// `<roomId>:__whiteboard__` document, so they travel the CRDT path — which
+// means they are bounded by the Yjs namespace's own payload cap, replayed to a
+// late joiner, and persisted, none of which the relay did.
 
 export const joinVideoSchema = z.object({ roomId: uuid });
 

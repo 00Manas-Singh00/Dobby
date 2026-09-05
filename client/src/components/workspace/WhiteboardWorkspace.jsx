@@ -1,9 +1,10 @@
 import Whiteboard from '../Whiteboard';
 
-const WhiteboardWorkspace = ({ socket, roomId }) => {
+// No socket prop: the board is a Yjs document now, and opens its own provider.
+const WhiteboardWorkspace = ({ roomId }) => {
     return (
         <div className="w-full h-full">
-            <Whiteboard socket={socket} roomId={roomId} />
+            <Whiteboard roomId={roomId} />
         </div>
     );
 };

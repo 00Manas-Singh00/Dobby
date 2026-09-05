@@ -220,7 +220,7 @@ describe('membership revoked mid-session', () => {
         const guestSocket = await connectSocket(server, guest);
         await joinRoom(guestSocket, room.id);
 
-        removeMember(room.id, guest.user.id, owner.user.id);
+        await removeMember(room.id, guest.user.id, owner.user.id);
 
         // The socket is still connected and still in the Socket.IO room; the
         // guard re-checks the database on every event for exactly this case.
@@ -353,7 +353,11 @@ describe('language sync', () => {
 });
 
 describe('whiteboard', () => {
-    it('relays a stroke to the peer but not back to the sender', async () => {
+    // Strokes moved onto Yjs (`<roomId>:__whiteboard__`), which is what gives a
+    // late joiner the history the relay never stored. The relay is gone, and
+    // this asserts that rather than leaving a dead second sync path in place:
+    // if `draw` were still handled, the two paths would double every stroke.
+    it('no longer relays strokes over Socket.IO', async () => {
         const owner = await createUser(server);
         const guest = await createUser(server);
         const room = await createRoom(owner);
@@ -364,35 +368,12 @@ describe('whiteboard', () => {
         const guestSocket = await connectSocket(server, guest);
         await joinRoom(guestSocket, room.id);
 
-        const data = { prevPos: { x: 0, y: 0 }, currPos: { x: 10, y: 10 }, color: '#000', lineWidth: 2 };
-        const relayed = once(guestSocket, 'on draw');
-        // The sender already drew it locally; echoing would double the stroke.
-        const noEcho = neverArrives(ownerSocket, 'on draw');
-        ownerSocket.emit('draw', { roomId: room.id, data });
-
-        expect(await relayed).toEqual({ data });
-        await noEcho;
-    });
-
-    it('drops a stroke carrying an unexpected field', async () => {
-        const owner = await createUser(server);
-        const guest = await createUser(server);
-        const room = await createRoom(owner);
-        await addMember(owner, room, guest);
-
-        const ownerSocket = await connectSocket(server, owner);
-        await joinRoom(ownerSocket, room.id);
-        const guestSocket = await connectSocket(server, guest);
-        await joinRoom(guestSocket, room.id);
-
-        const error = once(ownerSocket, 'socket:error');
         const silence = neverArrives(guestSocket, 'on draw');
         ownerSocket.emit('draw', {
             roomId: room.id,
-            data: { prevPos: { x: 0, y: 0 }, currPos: { x: 1, y: 1 }, payload: '<script>' },
+            data: { prevPos: { x: 0, y: 0 }, currPos: { x: 10, y: 10 } },
         });
 
-        expect(await error).toMatchObject({ event: 'draw' });
         await silence;
     });
 });

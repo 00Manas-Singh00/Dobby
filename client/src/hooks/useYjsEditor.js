@@ -1,14 +1,16 @@
 /**
  * hooks/useYjsEditor.js
  * Core CRDT hook for collaborative editing.
- * Initializes Y.Doc, SocketIOProvider, and MonacoBinding.
+ * Initializes Y.Doc, IndexeddbPersistence, SocketIOProvider, and MonacoBinding.
  */
 
 import { useEffect, useState, useRef } from 'react';
 import * as Y from 'yjs';
 import { SocketIOProvider } from 'y-socket.io';
+import { IndexeddbPersistence } from 'y-indexeddb';
 import { MonacoBinding } from 'y-monaco';
 import { API_BASE_URL, getAccessToken } from '@/services/apiClient';
+import { documentSocketOptions, retryOnDocumentMoved } from '@/services/yjsProvider';
 
 /**
  * @param {string} roomId
@@ -21,9 +23,11 @@ import { API_BASE_URL, getAccessToken } from '@/services/apiClient';
  */
 export function useYjsEditor(roomId, editorInstance, username, fileId = 'default') {
     const [synced, setSynced] = useState(false);
+    const [offlineReady, setOfflineReady] = useState(false);
     const providerRef = useRef(null);
     const docRef = useRef(null);
     const bindingRef = useRef(null);
+    const persistenceRef = useRef(null);
 
     useEffect(() => {
         if (!roomId || !editorInstance) return;
@@ -32,11 +36,27 @@ export function useYjsEditor(roomId, editorInstance, username, fileId = 'default
         const ydoc = new Y.Doc();
         docRef.current = ydoc;
 
-        // Initialize Socket.IO Provider
-        // SocketIOProvider(url, roomName, ydoc, options)
         // The Yjs room name is room + file, so each tab syncs (and persists to
         // LevelDB) independently, and awareness/cursors scope to that file.
         const yRoomName = `${roomId}:${fileId}`;
+
+        // ── Offline persistence ──────────────────────────────────────────────
+        // Attached *before* the network provider, deliberately. IndexedDB loads
+        // the last known state into the document immediately, so the editor has
+        // content before the socket connects; the server's state then merges
+        // into it rather than replacing it. Edits made while disconnected are
+        // written here as they happen, so closing the tab — or the laptop lid —
+        // no longer loses them: they are still in the document on the next open
+        // and merge on reconnect like any other concurrent edit.
+        //
+        // Keyed on room+file for the same reason the provider is: a shared key
+        // would restore one file's contents into another.
+        const persistence = new IndexeddbPersistence(`dobby:${yRoomName}`, ydoc);
+        persistenceRef.current = persistence;
+        persistence.on('synced', () => setOfflineReady(true));
+
+        // Initialize Socket.IO Provider
+        // SocketIOProvider(url, roomName, ydoc, options)
         // Yjs connects to its own namespace, which does not inherit the main
         // socket's authentication — it carries the access token itself, and the
         // server checks room membership against the namespace name.
@@ -50,8 +70,17 @@ export function useYjsEditor(roomId, editorInstance, username, fileId = 'default
             // tabs of one user; for a two-person room it saves nothing worth
             // having a second, unauthorized sync path for.
             disableBc: true,
-        });
+        },
+        // The fifth argument is passed straight to socket.io. `?doc=` is the
+        // routing hint a load balancer hashes on so every client of one document
+        // reaches the one replica allowed to serve it.
+        documentSocketOptions(yRoomName));
         providerRef.current = provider;
+
+        // If the hint did not work, the server refuses rather than serving a
+        // second copy of the document. Socket.IO does not retry a refused
+        // handshake by itself, so this does.
+        const stopRetrying = retryOnDocumentMoved(provider, yRoomName);
 
         provider.on('sync', (isSynced) => {
             setSynced(isSynced);
@@ -66,7 +95,6 @@ export function useYjsEditor(roomId, editorInstance, username, fileId = 'default
         });
 
         // Initialize Monaco Binding
-        // MonacoBinding(ydoc.getText('monaco'), editorInstance.getModel(), [editorInstance], awareness)
         const ytext = ydoc.getText('monaco');
         const binding = new MonacoBinding(
             ytext,
@@ -78,6 +106,8 @@ export function useYjsEditor(roomId, editorInstance, username, fileId = 'default
 
         return () => {
             setSynced(false);
+            setOfflineReady(false);
+            stopRetrying();
             if (bindingRef.current) {
                 bindingRef.current.destroy();
                 bindingRef.current = null;
@@ -86,6 +116,13 @@ export function useYjsEditor(roomId, editorInstance, username, fileId = 'default
                 providerRef.current.disconnect();
                 providerRef.current.destroy();
                 providerRef.current = null;
+            }
+            // Destroy, not clearData: the point of the store is that it
+            // survives the tab closing. Clearing it here would throw away
+            // exactly the offline edits it exists to keep.
+            if (persistenceRef.current) {
+                persistenceRef.current.destroy();
+                persistenceRef.current = null;
             }
             if (docRef.current) {
                 docRef.current.destroy();
@@ -96,7 +133,7 @@ export function useYjsEditor(roomId, editorInstance, username, fileId = 'default
 
     // Refs, not their current values: reading `.current` here would capture the
     // value at render time, which is null on the first render and never updates.
-    return { synced, providerRef, docRef };
+    return { synced, offlineReady, providerRef, docRef };
 }
 
 /**

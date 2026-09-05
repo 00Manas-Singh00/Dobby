@@ -14,7 +14,9 @@ import {
     Play,
     Loader2,
     ChevronDown,
-    Check } from 'lucide-react';
+    Check,
+    CloudOff,
+    History } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { LANGUAGES, isExecutable } from '@/constants/languageMap';
 import { useYjsEditor } from '@/hooks/useYjsEditor';
@@ -24,13 +26,24 @@ const CodeEditor = ({
     roomId,
     username,
     fileId = 'default',
+    fileName,
+    fileLanguage,
     theme = 'vs-dark',
     isRunning = false,
-    onRun }) => {
-    const [language, setLanguage] = useState(() => {
-        if (!roomId) return 'javascript';
-        return localStorage.getItem(`dobby_room_${roomId}_language`) || 'javascript';
-    });
+    onRun,
+    historyOpen = false,
+    onToggleHistory }) => {
+    // Language resolution, in priority order: whatever a person has explicitly
+    // chosen for this room (by using the selector here or on the other side),
+    // then the file's own extension, then a default. Only the first is state —
+    // the rest are derived during render, so a rename changes the highlighting
+    // without an effect that syncs one piece of state into another.
+    const [chosenLanguage, setChosenLanguage] = useState(() =>
+        roomId ? localStorage.getItem(`dobby_room_${roomId}_language`) : null
+    );
+    const language =
+        chosenLanguage ||
+        (fileLanguage && fileLanguage !== 'plaintext' ? fileLanguage : 'javascript');
     // Scoped per file as well as per language — one editor is mounted per open
     // tab, so a room+language key alone would have them overwrite each other.
     const getViewStateKey = useCallback(
@@ -49,14 +62,14 @@ const CodeEditor = ({
     const [editorInstance, setEditorInstance] = useState(null);
 
     // ── Yjs CRDT Sync ────────────────────────────────────────────────────────
-    const { synced } = useYjsEditor(roomId, editorInstance, username, fileId);
+    const { synced, offlineReady } = useYjsEditor(roomId, editorInstance, username, fileId);
 
     // ── Socket Language Sync ────────────────────────────────────────────────
     useEffect(() => {
         if (!socket) return;
 
         const handleLanguageChange = ({ languageUsed }) => {
-            setLanguage(languageUsed);
+            setChosenLanguage(languageUsed);
             if (roomId && languageUsed) {
                 localStorage.setItem(`dobby_room_${roomId}_language`, languageUsed);
             }
@@ -71,7 +84,7 @@ const CodeEditor = ({
 
     const handleLanguageChange = useCallback(
         (newLang) => {
-            setLanguage(newLang);
+            setChosenLanguage(newLang);
             if (roomId) {
                 localStorage.setItem(`dobby_room_${roomId}_language`, newLang);
             }
@@ -140,8 +153,10 @@ const CodeEditor = ({
     // ── Run handler ──────────────────────────────────────────────────────────
     const handleRun = useCallback(() => {
         const currentCode = editorRef.current?.getValue() || '';
-        onRun?.(currentCode, language);
-    }, [onRun, language]);
+        // The file id travels with the run so the output panel can attribute it
+        // to this file rather than to whichever tab is open when it returns.
+        onRun?.(currentCode, language, fileId);
+    }, [onRun, language, fileId]);
 
     const canRun = isExecutable(language);
     const currentLangMeta = LANGUAGES.find((l) => l.id === language);
@@ -150,7 +165,16 @@ const CodeEditor = ({
         <div className="flex flex-col h-full bg-white font-mono">
             {/* ── Editor Toolbar ─────────────────────────────────────────────── */}
             <div className="h-12 flex items-center justify-between px-4 border-b-4 border-black bg-[#FFEB3B] flex-shrink-0 gap-3">
-                {/* Left: Language selector */}
+                {/* Left: the file being edited, then its language */}
+                <div className="flex items-center gap-3 min-w-0">
+                    {fileName && (
+                        <span
+                            className="text-sm font-black text-black truncate max-w-[16rem]"
+                            title={fileName}
+                        >
+                            {fileName}
+                        </span>
+                    )}
                 <div className="relative">
                     <button
                         onClick={() => setShowLangDropdown((v) => !v)}
@@ -192,16 +216,45 @@ const CodeEditor = ({
                         </>
                     )}
                 </div>
+                </div>
 
-                {/* Right: Sync status + AI button + Run button */}
+                {/* Right: sync status, history, and the run button */}
                 <div className="flex items-center gap-3">
-                    {/* Sync indicator */}
-                    {synced && (
-                        <div className="flex items-center gap-2 px-3 py-1 bg-[#00E5FF] border-4 border-black neo-shadow-sm">
+                    {/* Sync indicator. Offline-but-saved is a distinct state
+                        worth showing: the edits are safe locally and will merge
+                        on reconnect, which is not obvious from a missing badge. */}
+                    <div
+                        className={cn(
+                            'flex items-center gap-2 px-3 py-1 border-4 border-black neo-shadow-sm',
+                            synced ? 'bg-[#00E5FF]' : 'bg-white'
+                        )}
+                        title={
+                            synced
+                                ? 'Changes are synced with the server.'
+                                : 'Offline — edits are saved in this browser and merge on reconnect.'
+                        }
+                    >
+                        {synced ? (
                             <Check size={14} className="text-black stroke-[3]" />
-                            <span className="text-xs text-black font-black uppercase tracking-widest">Synced</span>
-                        </div>
-                    )}
+                        ) : (
+                            <CloudOff size={14} className="text-black stroke-[3]" />
+                        )}
+                        <span className="text-xs text-black font-black uppercase tracking-widest">
+                            {synced ? 'Synced' : offlineReady ? 'Saved offline' : 'Connecting'}
+                        </span>
+                    </div>
+
+                    {/* History */}
+                    <button
+                        onClick={onToggleHistory}
+                        title="Document history"
+                        className={cn(
+                            'flex items-center gap-2 text-sm font-black px-4 py-2 uppercase tracking-widest border-4 border-black transition-none neo-shadow-sm hover:neo-shadow-hover',
+                            historyOpen ? 'bg-[#00E5FF] text-black' : 'bg-white text-black hover:bg-[#FFEB3B]'
+                        )}
+                    >
+                        <History size={16} className="stroke-[3]" />
+                    </button>
 
                     {/* Run button */}
                     <button

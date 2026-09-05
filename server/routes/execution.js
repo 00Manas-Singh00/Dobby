@@ -6,6 +6,7 @@
 import express from 'express';
 import { execute, getRuntimes } from '../services/pistonService.js';
 import { executeLimiter } from '../middleware/rateLimit.js';
+import { observeExecution } from '../services/metrics.js';
 
 const router = express.Router();
 
@@ -35,17 +36,26 @@ router.post('/execute', executeLimiter, async (req, res) => {
         return res.status(400).json({ error: 'Code exceeds maximum size of 100,000 characters.' });
     }
 
+    // Measured around the whole call, including the wait on Piston, because
+    // that wait *is* what the user experiences. Separating "our time" from
+    // "their time" would report a number nobody is waiting on.
+    const started = process.hrtime.bigint();
+    const elapsed = () => Number(process.hrtime.bigint() - started) / 1e9;
+
     try {
         console.log(`[Execute] language=${language}, codeLen=${code.length}`);
         const result = await execute(language, code, stdin, filename);
+        observeExecution(language, 'ok', elapsed());
         return res.json(result);
     } catch (error) {
         console.error('[Execute] Error:', error.message);
 
         if (error.message.includes('Unsupported language')) {
+            observeExecution(language, 'rejected', elapsed());
             return res.status(400).json({ error: error.message });
         }
 
+        observeExecution(language, 'error', elapsed());
         return res.status(502).json({
             error: 'Code execution service unavailable. Please try again.',
             detail: error.message,

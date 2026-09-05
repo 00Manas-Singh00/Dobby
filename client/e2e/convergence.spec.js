@@ -162,6 +162,36 @@ test.describe('collaborative editing', () => {
         await guestContext.close();
     });
 
+    test('the Yjs connection carries the document routing hint', async ({ browser }) => {
+        // A clustered deployment routes on `?doc=<roomId>:<fileId>`, because the
+        // document name lives in the Socket.IO namespace — inside the payload —
+        // where a load balancer cannot see it. If the browser ever stopped
+        // sending this, nothing would break on one node and every document would
+        // be misrouted on several, so it is asserted here rather than trusted.
+        const owner = await registerUser('owner');
+        const room = await createRoom(owner);
+
+        const context = await browser.newContext();
+        await signIn(context, owner);
+        const page = await context.newPage();
+
+        const socketUrls = [];
+        page.on('websocket', (ws) => socketUrls.push(ws.url()));
+
+        await openRoom(page, room);
+        await typeInEditor(page, 'hello');
+
+        await expect
+            .poll(() => socketUrls.filter((url) => url.includes('doc=')))
+            .not.toHaveLength(0);
+
+        // The hint must name this room's document, not some other one — that is
+        // what makes the hash put both people on the same replica.
+        expect(socketUrls.some((url) => url.includes(`doc=${room.id}`))).toBe(true);
+
+        await context.close();
+    });
+
     test('a non-member cannot open the room', async ({ browser }) => {
         const owner = await registerUser('owner');
         const stranger = await registerUser('stranger');

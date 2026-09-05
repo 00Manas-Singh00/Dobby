@@ -2,16 +2,16 @@
  * services/retentionService.js
  * Scheduled expiry for everything Dobby keeps on disk.
  *
- * Previously nothing here expired: Yjs documents accumulated in LevelDB
- * indefinitely with no delete path, and refresh tokens and invites were never
- * collected. The policy is deliberately simple and stated in one place so it
+ * Previously nothing here expired: Yjs documents accumulated indefinitely with
+ * no delete path, and refresh tokens and invites were never collected. The policy is deliberately simple and stated in one place so it
  * can be documented and changed as one number.
  */
 
 import db from '../db.js';
 import { listStaleRooms, pruneInvites, deleteRoom } from './roomService.js';
 import { pruneRefreshTokens } from './authService.js';
-import { deleteRoomDocuments, pruneOrphanedDocuments } from './yjsService.js';
+import { deleteRoomDocuments, pruneOrphanedDocuments, listDocumentNames } from './yjsService.js';
+import { pruneSnapshots } from './snapshotService.js';
 
 /** A room untouched for this long is deleted along with its documents. */
 export const ROOM_RETENTION_MS = Number(
@@ -20,29 +20,40 @@ export const ROOM_RETENTION_MS = Number(
 
 const SWEEP_INTERVAL_MS = Number(process.env.RETENTION_SWEEP_INTERVAL_MS || 60 * 60 * 1000);
 
-const roomExists = (roomId) =>
-    Boolean(db.prepare('SELECT 1 FROM rooms WHERE id = ?').get(roomId));
+const roomExists = async (roomId) =>
+    Boolean(await db.get('SELECT 1 AS ok FROM rooms WHERE id = ?', [roomId]));
 
 /**
  * Run one retention pass. Exported separately from the scheduler so it can be
  * triggered manually and tested without waiting an hour.
  */
 export async function runRetentionSweep() {
-    const summary = { rooms: 0, documents: 0, invites: 0, refreshTokens: 0 };
+    const summary = { rooms: 0, documents: 0, snapshots: 0, invites: 0, refreshTokens: 0 };
 
     try {
-        for (const room of listStaleRooms(ROOM_RETENTION_MS)) {
+        for (const room of await listStaleRooms(ROOM_RETENTION_MS)) {
             // Documents first: if the sweep dies between the two steps, the room
             // row survives and the next pass retries. The reverse order would
             // orphan the documents.
             summary.documents += await deleteRoomDocuments(room.id);
-            deleteRoom(room.id, room.ownerId);
+            await deleteRoom(room.id, room.ownerId);
             summary.rooms += 1;
         }
 
         summary.documents += await pruneOrphanedDocuments(roomExists);
-        summary.invites = pruneInvites();
-        summary.refreshTokens = pruneRefreshTokens();
+
+        // Snapshots outlive their document only if something went wrong — a
+        // room deleted while the process was down, or a failed file delete. The
+        // room_id foreign key covers the room case; this covers the file case,
+        // where the room still exists but the document does not.
+        const liveDocuments = new Set(await listDocumentNames());
+        summary.snapshots = await pruneSnapshots(
+            async (docName) =>
+                liveDocuments.has(docName) || (await roomExists(docName.split(':')[0]))
+        );
+
+        summary.invites = await pruneInvites();
+        summary.refreshTokens = await pruneRefreshTokens();
     } catch (error) {
         console.error('[Retention] Sweep failed:', error);
     }
@@ -51,7 +62,8 @@ export async function runRetentionSweep() {
     if (touched) {
         console.log(
             `[Retention] Removed ${summary.rooms} room(s), ${summary.documents} document(s), ` +
-            `${summary.invites} invite(s), ${summary.refreshTokens} refresh token(s)`
+            `${summary.snapshots} snapshot(s), ${summary.invites} invite(s), ` +
+            `${summary.refreshTokens} refresh token(s)`
         );
     }
     return summary;

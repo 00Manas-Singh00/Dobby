@@ -10,6 +10,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import jwt from 'jsonwebtoken';
 import db from '../../db.js';
+import { resetDatabase } from '../helpers/db.js';
 import {
     register,
     login,
@@ -29,69 +30,63 @@ const account = (overrides = {}) => ({
     ...overrides,
 });
 
-beforeEach(() => {
-    db.exec('DELETE FROM refresh_tokens; DELETE FROM room_members; DELETE FROM rooms; DELETE FROM users;');
-});
+beforeEach(resetDatabase);
 
 describe('register', () => {
-    it('returns a session and stores the user', () => {
-        const session = register(account());
+    it('returns a session and stores the user', async () => {
+        const session = await register(account());
 
         expect(session.user.username).toBe('ada');
         expect(session.accessToken).toBeTypeOf('string');
         expect(session.refreshToken).toBeTypeOf('string');
-        expect(getUserById(session.user.id)).toMatchObject({ email: 'ada@example.com' });
+        expect(await getUserById(session.user.id)).toMatchObject({ email: 'ada@example.com' });
     });
 
-    it('never returns the password hash', () => {
-        const session = register(account());
+    it('never returns the password hash', async () => {
+        const session = await register(account());
         expect(session.user).not.toHaveProperty('password_hash');
         expect(JSON.stringify(session.user)).not.toContain('$2');
     });
 
-    it('normalizes the email, so case is not a way to duplicate an account', () => {
-        register(account({ email: 'Ada@Example.COM' }));
-        expect(() => register(account({ email: 'ada@example.com' }))).toThrow(AuthError);
+    it('normalizes the email, so case is not a way to duplicate an account', async () => {
+        await register(account({ email: 'Ada@Example.COM' }));
+        await expect(register(account({ email: 'ada@example.com' }))).rejects.toThrow(AuthError);
     });
 
-    it('rejects a duplicate email with 409', () => {
-        register(account());
-        expect(() => register(account({ username: 'other' }))).toThrow(
+    it('rejects a duplicate email with 409', async () => {
+        await register(account());
+        await expect(register(account({ username: 'other' }))).rejects.toThrow(
             expect.objectContaining({ status: 409 })
         );
     });
 });
 
 describe('login', () => {
-    it('accepts the correct password', () => {
-        const created = register(account());
-        const session = login({ email: 'ada@example.com', password: account().password });
+    it('accepts the correct password', async () => {
+        const created = await register(account());
+        const session = await login({ email: 'ada@example.com', password: account().password });
         expect(session.user.id).toBe(created.user.id);
     });
 
-    it('rejects a wrong password with 401', () => {
-        register(account());
-        expect(() => login({ email: 'ada@example.com', password: 'wrong password here' })).toThrow(
-            expect.objectContaining({ status: 401 })
-        );
+    it('rejects a wrong password with 401', async () => {
+        await register(account());
+        await expect(
+            login({ email: 'ada@example.com', password: 'wrong password here' })
+        ).rejects.toThrow(expect.objectContaining({ status: 401 }));
     });
 
-    it('gives an unknown email the same error as a wrong password', () => {
-        register(account());
-        const unknown = (() => {
+    it('gives an unknown email the same error as a wrong password', async () => {
+        await register(account());
+        const failure = async (email) => {
             try {
-                login({ email: 'nobody@example.com', password: 'whatever at all' });
+                await login({ email, password: 'whatever at all' });
             } catch (error) {
                 return error;
             }
-        })();
-        const wrongPassword = (() => {
-            try {
-                login({ email: 'ada@example.com', password: 'whatever at all' });
-            } catch (error) {
-                return error;
-            }
-        })();
+            throw new Error('Expected the login to fail.');
+        };
+        const unknown = await failure('nobody@example.com');
+        const wrongPassword = await failure('ada@example.com');
 
         // Distinguishable errors would turn login into an account-enumeration
         // oracle.
@@ -101,62 +96,64 @@ describe('login', () => {
 });
 
 describe('access tokens', () => {
-    it('verifies a freshly issued token', () => {
-        const session = register(account());
-        expect(verifyAccessToken(session.accessToken).id).toBe(session.user.id);
+    it('verifies a freshly issued token', async () => {
+        const session = await register(account());
+        expect((await verifyAccessToken(session.accessToken)).id).toBe(session.user.id);
     });
 
-    it('rejects a token signed with a different secret', () => {
+    it('rejects a token signed with a different secret', async () => {
         const forged = jwt.sign({ sub: 'anyone' }, 'a-different-secret-entirely-long-enough');
-        expect(() => verifyAccessToken(forged)).toThrow(AuthError);
+        await expect(verifyAccessToken(forged)).rejects.toThrow(AuthError);
     });
 
-    it('rejects an expired token', () => {
-        const session = register(account());
+    it('rejects an expired token', async () => {
+        const session = await register(account());
         const expired = jwt.sign({ sub: session.user.id }, process.env.JWT_SECRET, { expiresIn: '-1s' });
-        expect(() => verifyAccessToken(expired)).toThrow(/expired|Invalid/i);
+        await expect(verifyAccessToken(expired)).rejects.toThrow(/expired|Invalid/i);
     });
 
-    it('rejects a valid token whose account has been deleted', () => {
-        const session = register(account());
-        db.prepare('DELETE FROM users WHERE id = ?').run(session.user.id);
+    it('rejects a valid token whose account has been deleted', async () => {
+        const session = await register(account());
+        await db.run('DELETE FROM users WHERE id = ?', [session.user.id]);
 
         // The signature is still good; the authorization decisions downstream
         // all assume the user row exists.
-        expect(() => verifyAccessToken(session.accessToken)).toThrow(/no longer exists/);
+        await expect(verifyAccessToken(session.accessToken)).rejects.toThrow(/no longer exists/);
     });
 });
 
 describe('refresh', () => {
-    it('rotates: the old token stops working and a new one is issued', () => {
-        const first = register(account());
-        const second = refresh(first.refreshToken);
+    it('rotates: the old token stops working and a new one is issued', async () => {
+        const first = await register(account());
+        const second = await refresh(first.refreshToken);
 
         expect(second.refreshToken).not.toBe(first.refreshToken);
         expect(second.user.id).toBe(first.user.id);
-        expect(() => refresh(first.refreshToken)).toThrow(/invalid or expired/i);
+        await expect(refresh(first.refreshToken)).rejects.toThrow(/invalid or expired/i);
     });
 
-    it('accepts the newly issued token', () => {
-        const first = register(account());
-        const second = refresh(first.refreshToken);
-        expect(() => refresh(second.refreshToken)).not.toThrow();
+    it('accepts the newly issued token', async () => {
+        const first = await register(account());
+        const second = await refresh(first.refreshToken);
+        await expect(refresh(second.refreshToken)).resolves.toBeDefined();
     });
 
-    it('rejects a missing, unknown, or expired token', () => {
-        expect(() => refresh(undefined)).toThrow(expect.objectContaining({ status: 401 }));
-        expect(() => refresh('not-a-real-token')).toThrow(expect.objectContaining({ status: 401 }));
-
-        const session = register(account());
-        db.prepare('UPDATE refresh_tokens SET expires_at = ?').run(
-            new Date(Date.now() - 1000).toISOString()
+    it('rejects a missing, unknown, or expired token', async () => {
+        await expect(refresh(undefined)).rejects.toThrow(expect.objectContaining({ status: 401 }));
+        await expect(refresh('not-a-real-token')).rejects.toThrow(
+            expect.objectContaining({ status: 401 })
         );
-        expect(() => refresh(session.refreshToken)).toThrow(/invalid or expired/i);
+
+        const session = await register(account());
+        await db.run('UPDATE refresh_tokens SET expires_at = ?', [
+            new Date(Date.now() - 1000).toISOString(),
+        ]);
+        await expect(refresh(session.refreshToken)).rejects.toThrow(/invalid or expired/i);
     });
 
-    it('stores refresh tokens hashed, so a database read is not a credential', () => {
-        const session = register(account());
-        const stored = db.prepare('SELECT token_hash FROM refresh_tokens').all();
+    it('stores refresh tokens hashed, so a database read is not a credential', async () => {
+        const session = await register(account());
+        const stored = await db.all('SELECT token_hash FROM refresh_tokens');
 
         expect(stored).toHaveLength(1);
         expect(stored[0].token_hash).not.toBe(session.refreshToken);
@@ -165,40 +162,43 @@ describe('refresh', () => {
 });
 
 describe('revocation', () => {
-    it('revokeRefreshToken invalidates exactly that token', () => {
-        const session = register(account());
-        revokeRefreshToken(session.refreshToken);
-        expect(() => refresh(session.refreshToken)).toThrow(AuthError);
+    it('revokeRefreshToken invalidates exactly that token', async () => {
+        const session = await register(account());
+        await revokeRefreshToken(session.refreshToken);
+        await expect(refresh(session.refreshToken)).rejects.toThrow(AuthError);
     });
 
-    it('ignores a missing token rather than throwing', () => {
-        expect(() => revokeRefreshToken(undefined)).not.toThrow();
+    it('ignores a missing token rather than throwing', async () => {
+        await expect(revokeRefreshToken(undefined)).resolves.toBeUndefined();
     });
 
-    it('revokeAllForUser ends every session for that user and no other', () => {
-        const ada = register(account());
-        const adaSecondDevice = login({ email: 'ada@example.com', password: account().password });
-        const grace = register(account({ email: 'grace@example.com', username: 'grace' }));
+    it('revokeAllForUser ends every session for that user and no other', async () => {
+        const ada = await register(account());
+        const adaSecondDevice = await login({
+            email: 'ada@example.com',
+            password: account().password,
+        });
+        const grace = await register(account({ email: 'grace@example.com', username: 'grace' }));
 
-        revokeAllForUser(ada.user.id);
+        await revokeAllForUser(ada.user.id);
 
-        expect(() => refresh(ada.refreshToken)).toThrow(AuthError);
-        expect(() => refresh(adaSecondDevice.refreshToken)).toThrow(AuthError);
-        expect(() => refresh(grace.refreshToken)).not.toThrow();
+        await expect(refresh(ada.refreshToken)).rejects.toThrow(AuthError);
+        await expect(refresh(adaSecondDevice.refreshToken)).rejects.toThrow(AuthError);
+        await expect(refresh(grace.refreshToken)).resolves.toBeDefined();
     });
 });
 
 describe('pruneRefreshTokens', () => {
-    it('removes expired tokens and leaves live ones', () => {
-        const live = register(account());
-        register(account({ email: 'grace@example.com', username: 'grace' }));
+    it('removes expired tokens and leaves live ones', async () => {
+        const live = await register(account());
+        await register(account({ email: 'grace@example.com', username: 'grace' }));
 
-        db.prepare('UPDATE refresh_tokens SET expires_at = ? WHERE user_id != ?').run(
+        await db.run('UPDATE refresh_tokens SET expires_at = ? WHERE user_id != ?', [
             new Date(Date.now() - 1000).toISOString(),
-            live.user.id
-        );
+            live.user.id,
+        ]);
 
-        expect(pruneRefreshTokens()).toBe(1);
-        expect(() => refresh(live.refreshToken)).not.toThrow();
+        expect(await pruneRefreshTokens()).toBe(1);
+        await expect(refresh(live.refreshToken)).resolves.toBeDefined();
     });
 });

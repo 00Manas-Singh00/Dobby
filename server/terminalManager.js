@@ -268,6 +268,16 @@ class TerminalManager {
     }
 
     /**
+     * Live PTYs on this process. Read on every metrics scrape rather than
+     * tracked by a counter, so it cannot drift away from the truth on the paths
+     * where a session dies without going through `destroyTerminal` — an exited
+     * shell, a container OOM-killed under its memory cap.
+     */
+    sessionCount() {
+        return this.terminals.size;
+    }
+
+    /**
      * Clean up all terminals
      */
     destroyAll() {
@@ -287,14 +297,19 @@ process.on('exit', () => {
     terminalManager.destroyAll();
 });
 
-process.on('SIGINT', () => {
-    terminalManager.destroyAll();
-    process.exit();
-});
-
-process.on('SIGTERM', () => {
-    terminalManager.destroyAll();
-    process.exit();
-});
+/**
+ * Containers must die with the process, so these handlers stay. What they no
+ * longer do is call `process.exit()` unconditionally: a clustered server also
+ * has to hand its document leases back on SIGTERM, and exiting from the first
+ * listener to run would cut that short. Whoever else is listening owns the
+ * exit; with nobody listening, this does, so a bare `node index.js` still stops
+ * on Ctrl-C.
+ */
+for (const signal of ['SIGINT', 'SIGTERM']) {
+    process.on(signal, () => {
+        terminalManager.destroyAll();
+        if (process.listenerCount(signal) === 1) process.exit();
+    });
+}
 
 export default terminalManager;

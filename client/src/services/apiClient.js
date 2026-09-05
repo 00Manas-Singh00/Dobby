@@ -139,6 +139,11 @@ export async function apiPost(path, body, options = {}) {
     return apiFetch(path, { ...options, method: 'POST', body: JSON.stringify(body ?? {}) });
 }
 
+/** PATCH helper. Used for partial updates — renaming or moving a file. */
+export async function apiPatch(path, body, options = {}) {
+    return apiFetch(path, { ...options, method: 'PATCH', body: JSON.stringify(body ?? {}) });
+}
+
 /** GET helper. */
 export async function apiGet(path, options = {}) {
     return apiFetch(path, { ...options, method: 'GET' });
@@ -153,5 +158,6 @@ export async function apiDelete(path, options = {}) {
 export const getJson = async (path, options) => (await apiGet(path, options)).json();
 export const postJson = async (path, body, options) => (await apiPost(path, body, options)).json();
 export const deleteJson = async (path, options) => (await apiDelete(path, options)).json();
+export const patchJson = async (path, body, options) => (await apiPatch(path, body, options)).json();
 
 export const API_BASE_URL = BASE_URL;

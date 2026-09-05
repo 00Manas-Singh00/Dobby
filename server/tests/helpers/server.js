@@ -15,7 +15,9 @@ import { createDobbyServer } from '../../index.js';
 
 /** Start a server listening on a port the OS picks. */
 export async function startTestServer(options = {}) {
-    const instance = createDobbyServer({ retention: false, ...options });
+    // `cluster: false` unless a test asks otherwise: an ambient REDIS_URL in the
+    // developer's shell must not silently change what the suite is testing.
+    const instance = await createDobbyServer({ retention: false, cluster: false, ...options });
 
     await new Promise((resolve) => instance.server.listen(0, '127.0.0.1', resolve));
     const { port } = instance.server.address();
@@ -52,6 +54,7 @@ export async function createUser(server, overrides = {}) {
         /** A supertest chain with this user's bearer token already attached. */
         get: (path) => server.api().get(path).set('Authorization', `Bearer ${response.body.accessToken}`),
         post: (path) => server.api().post(path).set('Authorization', `Bearer ${response.body.accessToken}`),
+        patch: (path) => server.api().patch(path).set('Authorization', `Bearer ${response.body.accessToken}`),
         delete: (path) => server.api().delete(path).set('Authorization', `Bearer ${response.body.accessToken}`),
     };
 }
