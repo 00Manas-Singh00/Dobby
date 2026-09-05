@@ -17,7 +17,6 @@ import {
     joinRoomSchema,
     updateLanguageSchema,
     sendMessageSchema,
-    drawSchema,
     terminalInputSchema,
     terminalResizeSchema,
     validateBody,
@@ -101,43 +100,6 @@ describe('sendMessageSchema', () => {
 
         expect(under.success).toBe(true);
         expect(over.success).toBe(false);
-    });
-});
-
-describe('drawSchema', () => {
-    const stroke = {
-        roomId: ROOM_ID,
-        data: { prevPos: { x: 1, y: 2 }, currPos: { x: 3, y: 4 }, color: '#fff', lineWidth: 2 },
-    };
-
-    it('accepts a well-formed stroke', () => {
-        expect(drawSchema.safeParse(stroke).success).toBe(true);
-    });
-
-    it('rejects unknown fields, so nothing extra is relayed to the peer', () => {
-        // The server relays this object verbatim; a strict schema is what stops
-        // it carrying a payload the recipient will act on.
-        expect(drawSchema.safeParse({
-            ...stroke,
-            data: { ...stroke.data, onload: 'alert(1)' },
-        }).success).toBe(false);
-
-        expect(drawSchema.safeParse({
-            ...stroke,
-            data: { ...stroke.data, prevPos: { x: 1, y: 2, z: 3 } },
-        }).success).toBe(false);
-    });
-
-    it('rejects non-finite coordinates', () => {
-        expect(drawSchema.safeParse({
-            ...stroke,
-            data: { ...stroke.data, prevPos: { x: Infinity, y: 0 } },
-        }).success).toBe(false);
-    });
-
-    it('bounds the line width', () => {
-        expect(drawSchema.safeParse({ ...stroke, data: { ...stroke.data, lineWidth: 201 } }).success).toBe(false);
-        expect(drawSchema.safeParse({ ...stroke, data: { ...stroke.data, lineWidth: -1 } }).success).toBe(false);
     });
 });
 

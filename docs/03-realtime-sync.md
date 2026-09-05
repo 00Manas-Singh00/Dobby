@@ -49,14 +49,18 @@ Monaco model
    Y.Text  ("monaco" key inside the Y.Doc)
      ▲  ▼
    Y.Doc  ──── y-socket.io SocketIOProvider ────► server YSocketIO ──► LevelDB
-                        │                              ▲
-                        │                    membership check on the namespace
-                   awareness (cursors, names, colors) — ephemeral, never stored
+     ▲  ▼               │                              ▲
+     │                  │                    membership check on the namespace
+  IndexeddbPersistence  │
+  (local replica)  awareness (cursors, names, colors) — ephemeral, never stored
 ```
 
 All of this is set up in
-[`client/src/hooks/useYjsEditor.js`](../client/src/hooks/useYjsEditor.js), which
-is the only place in the client that touches Yjs directly.
+[`client/src/hooks/useYjsEditor.js`](../client/src/hooks/useYjsEditor.js). Its
+sibling
+[`useYjsWhiteboard.js`](../client/src/hooks/useYjsWhiteboard.js) does the same
+for the board's `Y.Array`. Those two hooks are the only places in the client
+that touch Yjs directly.
 
 ### 3.1 One document per file
 
@@ -66,6 +70,18 @@ room-scoped name would give every tab the same `Y.Text` and every file would
 show identical content. Room-plus-file scoping also means LevelDB persists each
 file separately, and awareness naturally scopes cursors to the file the other
 person is actually looking at.
+
+The `fileId` is now a real thing: a row in `room_files`. The file tree and the
+document store agree on this name and nothing else connects them — the tree
+knows what a file is called, the CRDT knows what is in it, and
+`documentNameFor(roomId, fileId)` is the one place the convention is written
+down. Deleting a file is therefore two deletes, and they happen in that order
+(row, then document) so a failure leaves an orphaned document for the retention
+sweep rather than a file in the tree whose contents have been erased.
+
+The whiteboard uses the same scheme with a reserved id:
+**`${roomId}:__whiteboard__`**. It is not a row in the tree, so it cannot
+collide with a real file and does not appear in the explorer.
 
 ### 3.1b Document namespaces are authorized separately
 
@@ -124,36 +140,108 @@ this, keep that property.
 - **Durability** through `y-leveldb`; a server restart does not lose document
   content.
 
+### 3.4 Offline editing
+
+`useYjsEditor` attaches an `IndexeddbPersistence` to the document **before** the
+network provider, and the order is the point. IndexedDB loads the last known
+state into the `Y.Doc` immediately, so the editor has content before the socket
+connects; the server's state then *merges into* that rather than replacing it.
+Edits made while disconnected are written locally as they happen, so a closed
+tab — or a closed laptop lid — no longer loses them. They are still in the
+document on the next open, and they merge on reconnect exactly like any other
+concurrent edit, because to Yjs that is all they are.
+
+The store is keyed `dobby:${roomId}:${fileId}`, matching the provider, for the
+same reason the provider is keyed that way: a shared key would restore one
+file's contents into another.
+
+Teardown calls `destroy()`, never `clearData()`. Clearing on unmount would throw
+away precisely the offline edits the store exists to keep.
+
 ## 4. What is *not* CRDT-synced
 
-Only the editor buffer is. Everything else uses plain Socket.IO broadcast and
-carries the consequences:
+The editor buffer and the whiteboard are. What remains on plain Socket.IO
+broadcast, and the consequences:
 
 | Channel | Mechanism | Consequence |
 |---|---|---|
-| Chat | Server-held array, replayed on join | Survives refresh, not restart. Capped at 100 messages. |
-| Whiteboard | Stroke events relayed, never stored | A user joining mid-session sees a blank canvas. |
+| Chat | A database table, replayed on join | Survives a restart. Capped at 100 messages per room. Ordering is the server's arrival order, not a merge. |
+| File tree | Database rows; `files:changed` notifies, the client refetches | Two people renaming the same file at once: the second request fails on the uniqueness check rather than merging. |
 | Language selection | Last-write-wins per room | Two simultaneous changes: one silently wins. Harmless. |
 | Terminal | Byte stream to a shared PTY | Not merged at all — both users type into one shell. |
 
-The whiteboard is the most visible gap: it is the one collaborative surface
-where a late joiner loses history.
+The whiteboard used to head this table as the most visible gap — the one
+collaborative surface where a late joiner lost history. It is now a `Y.Array` of
+stroke segments in the room's `__whiteboard__` document, which bought replay,
+persistence, and offline drawing without a line of new protocol.
+
+Two details of that model are worth stating. **A clear is
+`array.delete(0, length)`**, not a separate message: a stroke drawn concurrently
+with a clear either survives or does not, consistently on both sides, whereas a
+"clear" event racing a "draw" event leaves the two peers disagreeing. And **the
+local user's strokes are not drawn directly** — they are appended to the array
+and painted by the observer, so there is exactly one code path putting ink on
+the canvas and the local and remote renderings cannot drift apart.
+
+The canvas is a *rendering* of the array rather than the record itself, which is
+what makes a resize correct: the element's backing buffer is cleared by a
+resize, and the board is repainted from the array instead of being copied
+pixel-for-pixel.
+
+## 4b. Document history
+
+`document_snapshots` holds point-in-time copies of a document's state, taken by
+a timer that skips anything whose state vector has not changed. Restore is the
+part that repays attention.
+
+**Applying an old update does not restore anything.** Yjs updates are additive:
+the operations in a past state are already present in the document that grew out
+of it, so re-applying them is a no-op. A restore has to be expressed as a *new*
+edit — the difference between what the document says now and what the snapshot
+said — and `restoreSnapshot` does exactly that, inside a single transaction so
+collaborators see one change rather than a delete followed by a visible retype.
+
+The consequence is a good one: a restore is an ordinary concurrent edit. A
+partner typing through one does not lose their characters, both sides converge,
+and the restored text reaches every open editor through the binding it already
+has, with no reload and no special client-side path.
 
 ## 5. Known limitations
 
-**No offline editing.** Yjs supports it via `y-indexeddb`, but Dobby does not
-wire it up. A client that edits while disconnected keeps its changes in memory
-only — they merge on reconnect if the tab stays open, and are lost if it doesn't.
-This is the cheapest significant win available and is the top item in
-[06 Roadmap](./06-roadmap.md).
+**Whiteboard strokes are absolute pixel coordinates.** Two people at very
+different window sizes see the same strokes positioned differently. Fixing this
+needs a coordinate space of its own — normalized or virtual-canvas — not a bug
+fix, and it is out of scope for Phase 3.
 
-**No document history.** LevelDB stores current state, not navigable snapshots.
-There is no "restore to earlier version".
+**Snapshot history is coarse.** Snapshots are taken on an interval and capped
+per document, so history is a handful of recent states rather than a navigable
+timeline, and there is no diff between two of them — the panel previews one
+version's text but does not compare.
 
 **Unbounded document growth is unmeasured.** `gcEnabled: true` lets Yjs collect
 tombstones, but nothing tracks per-document memory or the LevelDB directory's
 size over a long-lived room.
 
-**Single node.** `YSocketIO` holds documents in the process that serves them. A
-second replica would serve a different copy of the same room. See
-[02 §6](./02-architecture.md).
+**One node per document.** `YSocketIO` holds a document in the process serving
+it, and that is a property of the design rather than an oversight — a `Y.Doc` is
+state, not a message, so it cannot be replicated by broadcasting it harder. A
+clustered deployment therefore routes rather than replicates: the client appends
+`?doc=<roomId>:<fileId>` so the load balancer can hash on it, and the server
+takes a Redis lease on the document before serving it, refusing a connection
+that reaches the wrong replica with `DOCUMENT_MOVED` rather than quietly handing
+out a second copy. Document content moves to Redis at the same time, because
+LevelDB's exclusive directory lock means the state would otherwise be stranded
+on the first node that opened it.
+
+The consequence worth internalizing: **a routing mistake costs a reconnect, not
+your partner's work.** That is the entire reason the lease exists on top of the
+hashing — the hashing is what usually works, and the lease is what makes it safe
+when it does not. See [ADR-014](./07-adrs.md#adr-014),
+[ADR-015](./07-adrs.md#adr-015), and [02 §6.1](./02-architecture.md).
+
+**A document with no persistence backend is never released.** `y-socket.io`
+destroys a document when its last connection closes only if persistence is
+configured. With `YJS_PERSISTENCE_DIR=''` — the test and development setting —
+every document a process has opened stays in memory for the life of that
+process. Measured, with numbers, in
+[09 §5](./09-load-test.md#5-a-leak-the-metrics-found).

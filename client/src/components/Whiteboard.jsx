@@ -1,8 +1,27 @@
-import { useRef, useEffect, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { PenTool, Eraser, Trash2, Grid3x3 } from 'lucide-react';
+/**
+ * components/Whiteboard.jsx
+ * A shared canvas backed by a Yjs `Y.Array` of strokes.
+ *
+ * The board used to be a relay: each segment was broadcast as a `draw` event
+ * and stored nowhere, so a late joiner got a blank canvas and a refresh lost
+ * everything. The strokes now live in the room's `__whiteboard__` document, so
+ * the canvas is a *rendering* of that array rather than the only copy of it —
+ * which is what makes replay, persistence, and offline drawing work.
+ *
+ * One consequence worth knowing: the local user's strokes are not drawn
+ * directly. They are appended to the array, and the observer draws them, so
+ * there is exactly one code path that puts ink on the canvas and local and
+ * remote strokes cannot diverge.
+ */
 
-const Whiteboard = ({ socket, roomId }) => {
+import { useRef, useEffect, useState, useCallback } from 'react';
+import { Button } from '@/components/ui/button';
+import { PenTool, Eraser, Trash2, Grid3x3, Check, CloudOff } from 'lucide-react';
+import { useYjsWhiteboard } from '@/hooks/useYjsWhiteboard';
+
+const GRID_SIZE = 30;
+
+const Whiteboard = ({ roomId }) => {
     const canvasRef = useRef(null);
     const [isDrawing, setIsDrawing] = useState(false);
     const [color, setColor] = useState(() => {
@@ -23,131 +42,107 @@ const Whiteboard = ({ socket, roomId }) => {
         return localStorage.getItem(`dobby_room_${roomId}_wb_show_grid`) === 'true';
     });
     const prevPos = useRef({ x: 0, y: 0 });
-    const hasRestoredSnapshotRef = useRef(false);
+    // The grid is a local view preference, not a stroke, so the repaint path
+    // reads it through a ref rather than being torn down when it changes.
+    const showGridRef = useRef(showGrid);
+    useEffect(() => {
+        showGridRef.current = showGrid;
+    }, [showGrid]);
 
-    const persistSnapshot = () => {
+    const drawGrid = useCallback(() => {
         const canvas = canvasRef.current;
-        if (!canvas || !roomId) return;
-        try {
-            localStorage.setItem(`dobby_room_${roomId}_wb_snapshot`, canvas.toDataURL('image/png'));
-        } catch {
-            // Ignore quota/storage errors.
-        }
-    };
-    const drawGrid = () => {
-        const canvas = canvasRef.current;
+        if (!canvas) return;
         const ctx = canvas.getContext('2d');
-        const gridSize = 30;
 
         ctx.strokeStyle = '#e5e7eb20';
         ctx.lineWidth = 1;
 
-        for (let x = 0; x < canvas.width; x += gridSize) {
+        for (let x = 0; x < canvas.width; x += GRID_SIZE) {
             ctx.beginPath();
             ctx.moveTo(x, 0);
             ctx.lineTo(x, canvas.height);
             ctx.stroke();
         }
-
-        for (let y = 0; y < canvas.height; y += gridSize) {
+        for (let y = 0; y < canvas.height; y += GRID_SIZE) {
             ctx.beginPath();
             ctx.moveTo(0, y);
             ctx.lineTo(canvas.width, y);
             ctx.stroke();
         }
-    };
+    }, []);
 
-    const draw = (prev, curr, strokeColor, strokeWidth, emit = true) => {
-        const ctx = canvasRef.current.getContext('2d');
-        ctx.beginPath();
-        ctx.moveTo(prev.x, prev.y);
-        ctx.lineTo(curr.x, curr.y);
-        ctx.strokeStyle = strokeColor;
-        ctx.lineWidth = strokeWidth;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.stroke();
-
-        if (emit && socket) {
-            socket.emit("draw", {
-                roomId,
-                data: { prevPos: prev, currPos: curr, color: strokeColor, lineWidth: strokeWidth }
-            });
-        }
-    };
-
-
-    const colorPresets = [
-        { color: "#3b82f6", name: "Blue" },
-        { color: "#8b5cf6", name: "Purple" },
-        { color: "#ec4899", name: "Pink" },
-        { color: "#10b981", name: "Green" },
-        { color: "#f59e0b", name: "Orange" },
-        { color: "#ef4444", name: "Red" },
-        { color: "#000000", name: "Black" },
-        { color: "#ffffff", name: "White" },
-    ];
-
-    useEffect(() => {
-        if (!socket) return;
-
+    /** Paint a batch of strokes. The only place ink reaches the canvas. */
+    const paintStrokes = useCallback((strokes) => {
         const canvas = canvasRef.current;
+        if (!canvas) return;
         const ctx = canvas.getContext('2d');
+
+        for (const stroke of strokes) {
+            const { prevPos: from, currPos: to, color: strokeColor, lineWidth: width } = stroke;
+            if (!from || !to) continue;
+
+            ctx.beginPath();
+            ctx.moveTo(from.x, from.y);
+            ctx.lineTo(to.x, to.y);
+            ctx.strokeStyle = strokeColor || '#000000';
+            ctx.lineWidth = width || 3;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.stroke();
+        }
+    }, []);
+
+    const wipeCanvas = useCallback(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+        if (showGridRef.current) drawGrid();
+    }, [drawGrid]);
+
+    const { synced, addStroke, clear, allStrokes } = useYjsWhiteboard(
+        roomId,
+        paintStrokes,
+        wipeCanvas
+    );
+
+    // Resizing the canvas element clears its backing buffer, so the board is
+    // repainted from the array rather than copied pixel-for-pixel — the array
+    // is the record, the pixels are not.
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return undefined;
 
         const resize = () => {
             const parent = canvas.parentElement;
-            const tempCanvas = document.createElement('canvas');
-            const tempCtx = tempCanvas.getContext('2d');
-            tempCanvas.width = canvas.width;
-            tempCanvas.height = canvas.height;
-            tempCtx.drawImage(canvas, 0, 0);
-
             canvas.width = parent.clientWidth;
             canvas.height = parent.clientHeight;
-
-            ctx.drawImage(tempCanvas, 0, 0);
-
-            if (showGrid) {
-                drawGrid();
-            }
-
-            if (!hasRestoredSnapshotRef.current && roomId) {
-                const snapshot = localStorage.getItem(`dobby_room_${roomId}_wb_snapshot`);
-                if (snapshot) {
-                    const img = new Image();
-                    img.onload = () => {
-                        ctx.drawImage(img, 0, 0);
-                        if (showGrid) drawGrid();
-                    };
-                    img.src = snapshot;
-                }
-                hasRestoredSnapshotRef.current = true;
-            }
+            wipeCanvas();
+            paintStrokes(allStrokes());
         };
 
         window.addEventListener('resize', resize);
         resize();
 
-        socket.on("on draw", ({ data }) => {
-            draw(data.prevPos, data.currPos, data.color, data.lineWidth, false);
-        });
+        return () => window.removeEventListener('resize', resize);
+        // allStrokes is stable for a given room; the repaint helpers are memoized.
+    }, [wipeCanvas, paintStrokes, allStrokes]);
 
-        socket.on("clear canvas", () => {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            if (showGrid) {
-                drawGrid();
-            }
-            persistSnapshot();
-        });
+    // Toggling the grid is a repaint, not a stroke — nobody else sees it.
+    useEffect(() => {
+        wipeCanvas();
+        paintStrokes(allStrokes());
+    }, [showGrid, wipeCanvas, paintStrokes, allStrokes]);
 
-        return () => {
-            window.removeEventListener('resize', resize);
-            socket.off("on draw");
-            socket.off("clear canvas");
-        };
-    }, [socket, roomId, showGrid]);
-
-
+    const colorPresets = [
+        { color: '#3b82f6', name: 'Blue' },
+        { color: '#8b5cf6', name: 'Purple' },
+        { color: '#ec4899', name: 'Pink' },
+        { color: '#10b981', name: 'Green' },
+        { color: '#f59e0b', name: 'Orange' },
+        { color: '#ef4444', name: 'Red' },
+        { color: '#000000', name: 'Black' },
+        { color: '#ffffff', name: 'White' },
+    ];
 
     const handleMouseDown = (e) => {
         const { offsetX, offsetY } = e.nativeEvent;
@@ -159,35 +154,24 @@ const Whiteboard = ({ socket, roomId }) => {
         if (!isDrawing) return;
         const { offsetX, offsetY } = e.nativeEvent;
         const currPos = { x: offsetX, y: offsetY };
-        const drawColor = tool === "eraser" ? "#ffffff" : color;
-        const drawWidth = tool === "eraser" ? 20 : lineWidth;
-        draw(prevPos.current, currPos, drawColor, drawWidth);
+
+        addStroke({
+            prevPos: prevPos.current,
+            currPos,
+            color: tool === 'eraser' ? '#ffffff' : color,
+            lineWidth: tool === 'eraser' ? 20 : lineWidth,
+        });
+
         prevPos.current = currPos;
     };
 
-    const handleMouseUp = () => {
-        setIsDrawing(false);
-        persistSnapshot();
-    };
+    const handleMouseUp = () => setIsDrawing(false);
 
     const clearBoard = () => {
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        if (showGrid) {
-            drawGrid();
-        }
-        socket.emit("clear canvas", { roomId });
-        persistSnapshot();
-    };
-
-    const toggleGrid = () => {
-        const newShowGrid = !showGrid;
-        setShowGrid(newShowGrid);
-        if (newShowGrid) {
-            drawGrid();
-        }
-        persistSnapshot();
+        // Deleting the array's contents *is* the clear: both sides converge on
+        // the same board afterwards, which a separate "clear" message racing a
+        // stroke could not guarantee.
+        clear();
     };
 
     useEffect(() => {
@@ -221,12 +205,13 @@ const Whiteboard = ({ socket, roomId }) => {
                             key={preset.color}
                             onClick={() => {
                                 setColor(preset.color);
-                                setTool("pen");
+                                setTool('pen');
                             }}
-                            className={`w-8 h-8 rounded-none border-4 border-black transition-none ${color === preset.color && tool === "pen"
+                            className={`w-8 h-8 rounded-none border-4 border-black transition-none ${
+                                color === preset.color && tool === 'pen'
                                     ? 'scale-110 neo-shadow-sm'
                                     : 'hover:neo-shadow-sm'
-                                }`}
+                            }`}
                             style={{ backgroundColor: preset.color }}
                             title={preset.name}
                         />
@@ -238,8 +223,8 @@ const Whiteboard = ({ socket, roomId }) => {
                     <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => setTool("pen")}
-                        className={`h-10 w-10 border-4 border-black rounded-none transition-none ${tool === "pen" ? 'bg-[#00E5FF] neo-shadow-sm' : 'bg-white hover:bg-[#00E5FF]'}`}
+                        onClick={() => setTool('pen')}
+                        className={`h-10 w-10 border-4 border-black rounded-none transition-none ${tool === 'pen' ? 'bg-[#00E5FF] neo-shadow-sm' : 'bg-white hover:bg-[#00E5FF]'}`}
                         title="Pen"
                     >
                         <PenTool size={20} className="stroke-[3] text-black" />
@@ -247,8 +232,8 @@ const Whiteboard = ({ socket, roomId }) => {
                     <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => setTool("eraser")}
-                        className={`h-10 w-10 border-4 border-black rounded-none transition-none ${tool === "eraser" ? 'bg-[#FF4081] neo-shadow-sm' : 'bg-white hover:bg-[#FF4081]'}`}
+                        onClick={() => setTool('eraser')}
+                        className={`h-10 w-10 border-4 border-black rounded-none transition-none ${tool === 'eraser' ? 'bg-[#FF4081] neo-shadow-sm' : 'bg-white hover:bg-[#FF4081]'}`}
                         title="Eraser"
                     >
                         <Eraser size={20} className="stroke-[3] text-black" />
@@ -266,25 +251,23 @@ const Whiteboard = ({ socket, roomId }) => {
                         className="w-24 h-3 bg-white border-2 border-black rounded-none cursor-pointer accent-[#FF4081]"
                         title="Stroke Width"
                     />
-                    <div
-                        className="w-8 h-8 border-4 border-black bg-white flex items-center justify-center neo-shadow-sm"
-                    >
+                    <div className="w-8 h-8 border-4 border-black bg-white flex items-center justify-center neo-shadow-sm">
                         <div
                             className="rounded-full bg-black"
                             style={{
                                 width: `${Math.max(lineWidth, 4)}px`,
-                                height: `${Math.max(lineWidth, 4)}px`
+                                height: `${Math.max(lineWidth, 4)}px`,
                             }}
                         />
                     </div>
                 </div>
 
                 {/* Actions */}
-                <div className="flex gap-2">
+                <div className="flex gap-2 pr-4 border-r-4 border-black">
                     <Button
                         variant="ghost"
                         size="icon"
-                        onClick={toggleGrid}
+                        onClick={() => setShowGrid((on) => !on)}
                         className={`h-10 w-10 border-4 border-black rounded-none transition-none ${showGrid ? 'bg-[#00E5FF] neo-shadow-sm' : 'bg-white hover:bg-[#00E5FF]'}`}
                         title="Toggle Grid"
                     >
@@ -295,17 +278,34 @@ const Whiteboard = ({ socket, roomId }) => {
                         size="icon"
                         onClick={clearBoard}
                         className="h-10 w-10 border-4 border-black rounded-none transition-none bg-white hover:bg-[#FF4081] group"
-                        title="Clear Board"
+                        title="Clear board for everyone"
                     >
                         <Trash2 size={20} className="stroke-[3] text-black group-hover:text-black" />
                     </Button>
+                </div>
+
+                {/* Sync state. Offline drawing is kept locally and merges on
+                    reconnect, same as the editor. */}
+                <div
+                    className="flex items-center gap-2"
+                    title={
+                        synced
+                            ? 'The board is synced with the server.'
+                            : 'Offline — strokes are saved locally and merge on reconnect.'
+                    }
+                >
+                    {synced ? (
+                        <Check size={16} className="stroke-[3] text-black" />
+                    ) : (
+                        <CloudOff size={16} className="stroke-[3] text-black" />
+                    )}
                 </div>
             </div>
 
             {/* Canvas */}
             <canvas
                 ref={canvasRef}
-                className={`w-full h-full ${tool === "pen" ? "cursor-crosshair" : "cursor-cell"} touch-none`}
+                className={`w-full h-full ${tool === 'pen' ? 'cursor-crosshair' : 'cursor-cell'} touch-none`}
                 onMouseDown={handleMouseDown}
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}

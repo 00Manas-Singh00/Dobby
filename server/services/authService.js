@@ -5,8 +5,11 @@
  * Two token types:
  *  - access token: short-lived JWT, sent as a Bearer header on REST calls and
  *    in the Socket.IO handshake `auth`. Verified statelessly.
- *  - refresh token: long-lived opaque random string, stored hashed in SQLite so
- *    it can be revoked. Exchanged for a new access token at /api/auth/refresh.
+ *  - refresh token: long-lived opaque random string, stored hashed in the
+ *    relational store so it can be revoked. Exchanged for a new access token at
+ *    /api/auth/refresh.
+ *
+ * Every function that touches the store is async as of Phase 5 — see db.js.
  */
 
 import crypto from 'crypto';
@@ -56,34 +59,33 @@ function signAccessToken(user) {
     );
 }
 
-function issueRefreshToken(userId) {
+async function issueRefreshToken(userId) {
     const token = crypto.randomBytes(48).toString('base64url');
-    db.prepare(
+    await db.run(
         `INSERT INTO refresh_tokens (token_hash, user_id, created_at, expires_at)
-         VALUES (?, ?, ?, ?)`
-    ).run(
-        hashToken(token),
-        userId,
-        new Date().toISOString(),
-        new Date(Date.now() + REFRESH_TOKEN_TTL_MS).toISOString()
+         VALUES (?, ?, ?, ?)`,
+        [
+            hashToken(token),
+            userId,
+            new Date().toISOString(),
+            new Date(Date.now() + REFRESH_TOKEN_TTL_MS).toISOString(),
+        ]
     );
     return token;
 }
 
-function session(userRow) {
+async function session(userRow) {
     return {
         user: publicUser(userRow),
         accessToken: signAccessToken(userRow),
-        refreshToken: issueRefreshToken(userRow.id),
+        refreshToken: await issueRefreshToken(userRow.id),
     };
 }
 
-export function register({ email, username, password }) {
+export async function register({ email, username, password }) {
     const normalizedEmail = email.trim().toLowerCase();
 
-    const existing = db
-        .prepare('SELECT id FROM users WHERE email = ?')
-        .get(normalizedEmail);
+    const existing = await db.get('SELECT id FROM users WHERE email = ?', [normalizedEmail]);
     if (existing) throw new AuthError('An account with that email already exists.', 409);
 
     const row = {
@@ -94,18 +96,19 @@ export function register({ email, username, password }) {
         created_at: new Date().toISOString(),
     };
 
-    db.prepare(
+    await db.run(
         `INSERT INTO users (id, email, username, password_hash, created_at)
-         VALUES (@id, @email, @username, @password_hash, @created_at)`
-    ).run(row);
+         VALUES (?, ?, ?, ?, ?)`,
+        [row.id, row.email, row.username, row.password_hash, row.created_at]
+    );
 
     return session(row);
 }
 
-export function login({ email, password }) {
-    const row = db
-        .prepare('SELECT * FROM users WHERE email = ?')
-        .get(email.trim().toLowerCase());
+export async function login({ email, password }) {
+    const row = await db.get('SELECT * FROM users WHERE email = ?', [
+        email.trim().toLowerCase(),
+    ]);
 
     // Compare against a dummy hash when the account is missing so that a
     // non-existent email costs the same time as a wrong password.
@@ -121,41 +124,47 @@ export function login({ email, password }) {
  * Exchange a refresh token for a fresh pair, rotating the old one. Reuse of an
  * already-consumed token fails rather than silently issuing a second session.
  */
-export function refresh(refreshToken) {
+export async function refresh(refreshToken) {
     if (!refreshToken) throw new AuthError('Missing refresh token.', 401);
 
     const tokenHash = hashToken(refreshToken);
-    const row = db.prepare('SELECT * FROM refresh_tokens WHERE token_hash = ?').get(tokenHash);
+    const row = await db.get('SELECT * FROM refresh_tokens WHERE token_hash = ?', [tokenHash]);
 
     if (!row || row.revoked_at || new Date(row.expires_at) < new Date()) {
         throw new AuthError('Refresh token is invalid or expired.', 401);
     }
 
-    db.prepare('UPDATE refresh_tokens SET revoked_at = ? WHERE token_hash = ?')
-        .run(new Date().toISOString(), tokenHash);
+    await db.run('UPDATE refresh_tokens SET revoked_at = ? WHERE token_hash = ?', [
+        new Date().toISOString(),
+        tokenHash,
+    ]);
 
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(row.user_id);
+    const user = await db.get('SELECT * FROM users WHERE id = ?', [row.user_id]);
     if (!user) throw new AuthError('Account no longer exists.', 401);
 
     return session(user);
 }
 
-export function revokeRefreshToken(refreshToken) {
+export async function revokeRefreshToken(refreshToken) {
     if (!refreshToken) return;
-    db.prepare('UPDATE refresh_tokens SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL')
-        .run(new Date().toISOString(), hashToken(refreshToken));
+    await db.run(
+        'UPDATE refresh_tokens SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL',
+        [new Date().toISOString(), hashToken(refreshToken)]
+    );
 }
 
-export function revokeAllForUser(userId) {
-    db.prepare('UPDATE refresh_tokens SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL')
-        .run(new Date().toISOString(), userId);
+export async function revokeAllForUser(userId) {
+    await db.run(
+        'UPDATE refresh_tokens SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL',
+        [new Date().toISOString(), userId]
+    );
 }
 
 /**
  * Verify an access token and return the current user record.
  * Used by both the Express middleware and the Socket.IO handshake.
  */
-export function verifyAccessToken(token) {
+export async function verifyAccessToken(token) {
     let payload;
     try {
         payload = jwt.verify(token, JWT_SECRET);
@@ -165,21 +174,22 @@ export function verifyAccessToken(token) {
 
     // The token is signed, but the account may have been deleted since. Every
     // authorization decision downstream assumes this user still exists.
-    const row = db.prepare('SELECT * FROM users WHERE id = ?').get(payload.sub);
+    const row = await db.get('SELECT * FROM users WHERE id = ?', [payload.sub]);
     if (!row) throw new AuthError('Account no longer exists.', 401);
 
     return publicUser(row);
 }
 
-export function getUserById(userId) {
-    const row = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+export async function getUserById(userId) {
+    const row = await db.get('SELECT * FROM users WHERE id = ?', [userId]);
     return row ? publicUser(row) : null;
 }
 
 /** Drop refresh tokens that are expired or long revoked. Called on a timer. */
-export function pruneRefreshTokens() {
-    const result = db
-        .prepare("DELETE FROM refresh_tokens WHERE expires_at < ? OR revoked_at < ?")
-        .run(new Date().toISOString(), new Date(Date.now() - REFRESH_TOKEN_TTL_MS).toISOString());
+export async function pruneRefreshTokens() {
+    const result = await db.run(
+        'DELETE FROM refresh_tokens WHERE expires_at < ? OR revoked_at < ?',
+        [new Date().toISOString(), new Date(Date.now() - REFRESH_TOKEN_TTL_MS).toISOString()]
+    );
     return result.changes;
 }

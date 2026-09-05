@@ -75,6 +75,21 @@ export async function signIn(context, user) {
 }
 
 /**
+ * The editor for the *active* tab.
+ *
+ * `EditorWorkspace` mounts one Monaco instance per open file and hides the
+ * inactive ones with `display: none`, so a plain `.first()` picks whichever
+ * file happens to be first in the tab list — which stopped being the visible
+ * one as soon as files became real and a room could hold more than one open
+ * tab. Every helper below goes through this.
+ */
+export const activeEditor = (page) => page.locator('.monaco-editor:visible').first();
+
+/** The active editor's line container. */
+export const activeEditorLines = (page) =>
+    page.locator('.monaco-editor:visible .view-lines').first();
+
+/**
  * Open a room and wait until Monaco is mounted and the Yjs provider reports it
  * has synced. Returns the editor container.
  *
@@ -85,10 +100,10 @@ export async function signIn(context, user) {
 export async function openRoom(page, room) {
     await page.goto(`/room/${room.id}`);
 
-    const editor = page.locator('.monaco-editor').first();
+    const editor = activeEditor(page);
     await editor.waitFor({ timeout: 45_000 });
-    await page.locator('.monaco-editor .view-lines').first().waitFor({ timeout: 45_000 });
-    await page.getByText('Synced', { exact: true }).first().waitFor({ timeout: 45_000 });
+    await activeEditorLines(page).waitFor({ timeout: 45_000 });
+    await waitForSynced(page);
 
     return editor;
 }
@@ -99,7 +114,7 @@ export async function openRoom(page, room) {
  * closer to what the CRDT sees in practice.
  */
 export async function typeInEditor(page, text) {
-    await page.locator('.monaco-editor .view-lines').first().click();
+    await activeEditorLines(page).click();
     await page.keyboard.type(text, { delay: 20 });
     // Monaco's suggestion widget swallows subsequent keys and can accept a
     // completion into the buffer; dismiss it before anything reads the text.
@@ -114,7 +129,7 @@ export async function typeInEditor(page, text) {
  * so the newline is swallowed and both lines land as one.
  */
 export async function typeLines(page, lines) {
-    await page.locator('.monaco-editor .view-lines').first().click();
+    await activeEditorLines(page).click();
     for (const [index, line] of lines.entries()) {
         if (index > 0) {
             await page.keyboard.press('Escape');
@@ -127,14 +142,31 @@ export async function typeLines(page, lines) {
 
 /** Put the caret at the end of a given (0-indexed) editor line. */
 export async function clickLineEnd(page, lineIndex) {
-    await page.locator('.monaco-editor .view-line').nth(lineIndex).click();
+    await page.locator('.monaco-editor:visible .view-line').nth(lineIndex).click();
     await page.keyboard.press('End');
 }
 
 /** The editor's full visible text, with Monaco's non-breaking spaces normalized. */
 export async function editorText(page) {
-    const lines = await page.locator('.monaco-editor .view-lines .view-line').allInnerTexts();
+    const lines = await page
+        .locator('.monaco-editor:visible .view-lines .view-line')
+        .allInnerTexts();
     // Monaco pads with non-breaking spaces; normalize so assertions can use
     // ordinary text.
     return lines.join('\n').replace(/\u00a0/g, ' ');
+}
+
+/**
+ * Wait until the visible editor reports it has synced with the server.
+ *
+ * The badge exists once per open tab, so it is scoped to the visible one — the
+ * hidden tabs' badges say "Synced" too, and waiting on one of those would let a
+ * test type into a buffer the server has not caught up with.
+ */
+export async function waitForSynced(page, timeout = 45_000) {
+    await page
+        .getByText('Synced', { exact: true })
+        .locator('visible=true')
+        .first()
+        .waitFor({ timeout });
 }

@@ -12,6 +12,7 @@
 import crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import db from '../db.js';
+import { seedRoomFiles } from './fileService.js';
 
 export const ROOM_CAPACITY = 2; // see docs/07-adrs.md#adr-006
 
@@ -32,7 +33,7 @@ const publicRoom = (row) => ({
     lastActiveAt: row.last_active_at,
 });
 
-export function createRoom(ownerId, name) {
+export async function createRoom(ownerId, name) {
     const now = new Date().toISOString();
     const room = {
         id: uuidv4(),
@@ -44,101 +45,108 @@ export function createRoom(ownerId, name) {
 
     // The room and its owner membership must appear together — a room with no
     // members would be unreachable by anyone, including its creator.
-    db.transaction(() => {
-        db.prepare(
+    await db.tx(async (t) => {
+        await t.run(
             `INSERT INTO rooms (id, name, owner_id, created_at, last_active_at)
-             VALUES (@id, @name, @owner_id, @created_at, @last_active_at)`
-        ).run(room);
-        db.prepare(
+             VALUES (?, ?, ?, ?, ?)`,
+            [room.id, room.name, room.owner_id, room.created_at, room.last_active_at]
+        );
+        await t.run(
             `INSERT INTO room_members (room_id, user_id, role, joined_at)
-             VALUES (?, ?, 'owner', ?)`
-        ).run(room.id, ownerId, now);
-    })();
+             VALUES (?, ?, 'owner', ?)`,
+            [room.id, ownerId, now]
+        );
+    });
+
+    // A room whose explorer is empty is indistinguishable from a broken one, so
+    // it opens with somewhere to type. Outside the transaction above because a
+    // failure to seed should not lose the room.
+    await seedRoomFiles(room.id);
 
     return publicRoom(room);
 }
 
-export function getRoom(roomId) {
-    const row = db.prepare('SELECT * FROM rooms WHERE id = ?').get(roomId);
+export async function getRoom(roomId) {
+    const row = await db.get('SELECT * FROM rooms WHERE id = ?', [roomId]);
     return row ? publicRoom(row) : null;
 }
 
-export function isMember(roomId, userId) {
+export async function isMember(roomId, userId) {
     return Boolean(
-        db
-            .prepare('SELECT 1 FROM room_members WHERE room_id = ? AND user_id = ?')
-            .get(roomId, userId)
+        await db.get('SELECT 1 AS ok FROM room_members WHERE room_id = ? AND user_id = ?', [
+            roomId,
+            userId,
+        ])
     );
 }
 
-export function isOwner(roomId, userId) {
+export async function isOwner(roomId, userId) {
     return Boolean(
-        db.prepare('SELECT 1 FROM rooms WHERE id = ? AND owner_id = ?').get(roomId, userId)
+        await db.get('SELECT 1 AS ok FROM rooms WHERE id = ? AND owner_id = ?', [roomId, userId])
     );
 }
 
-export function listRoomsForUser(userId) {
-    return db
-        .prepare(
-            `SELECT r.*, m.role
-               FROM rooms r
-               JOIN room_members m ON m.room_id = r.id
-              WHERE m.user_id = ?
-              ORDER BY r.last_active_at DESC`
-        )
-        .all(userId)
-        .map((row) => ({ ...publicRoom(row), role: row.role }));
+export async function listRoomsForUser(userId) {
+    const rows = await db.all(
+        `SELECT r.*, m.role
+           FROM rooms r
+           JOIN room_members m ON m.room_id = r.id
+          WHERE m.user_id = ?
+          ORDER BY r.last_active_at DESC`,
+        [userId]
+    );
+    return rows.map((row) => ({ ...publicRoom(row), role: row.role }));
 }
 
-export function listMembers(roomId) {
-    return db
-        .prepare(
-            `SELECT u.id, u.username, u.email, m.role, m.joined_at
-               FROM room_members m
-               JOIN users u ON u.id = m.user_id
-              WHERE m.room_id = ?
-              ORDER BY m.joined_at ASC`
-        )
-        .all(roomId)
-        .map((row) => ({
+export async function listMembers(roomId) {
+    const rows = await db.all(
+        `SELECT u.id, u.username, u.email, m.role, m.joined_at
+           FROM room_members m
+           JOIN users u ON u.id = m.user_id
+          WHERE m.room_id = ?
+          ORDER BY m.joined_at ASC`,
+        [roomId]
+    );
+    return rows.map((row) => ({
             id: row.id,
             username: row.username,
             email: row.email,
             role: row.role,
-            joinedAt: row.joined_at,
-        }));
+        joinedAt: row.joined_at,
+    }));
 }
 
 export function countMembers(roomId) {
-    return db
-        .prepare('SELECT COUNT(*) AS n FROM room_members WHERE room_id = ?')
-        .get(roomId).n;
+    return db.count('SELECT COUNT(*) AS n FROM room_members WHERE room_id = ?', [roomId]);
 }
 
-export function touchRoom(roomId) {
-    db.prepare('UPDATE rooms SET last_active_at = ? WHERE id = ?')
-        .run(new Date().toISOString(), roomId);
+export async function touchRoom(roomId) {
+    await db.run('UPDATE rooms SET last_active_at = ? WHERE id = ?', [
+        new Date().toISOString(),
+        roomId,
+    ]);
 }
 
-export function createInvite(roomId, userId) {
-    if (!isOwner(roomId, userId)) {
+export async function createInvite(roomId, userId) {
+    if (!(await isOwner(roomId, userId))) {
         throw new RoomError('Only the room owner can create invites.', 403);
     }
-    if (countMembers(roomId) >= ROOM_CAPACITY) {
+    if ((await countMembers(roomId)) >= ROOM_CAPACITY) {
         throw new RoomError(`Room already has its maximum of ${ROOM_CAPACITY} members.`, 409);
     }
 
     const token = crypto.randomBytes(32).toString('base64url');
     const now = new Date();
-    db.prepare(
+    await db.run(
         `INSERT INTO room_invites (token, room_id, created_by, created_at, expires_at)
-         VALUES (?, ?, ?, ?, ?)`
-    ).run(
-        token,
-        roomId,
-        userId,
-        now.toISOString(),
-        new Date(now.getTime() + INVITE_TTL_MS).toISOString()
+         VALUES (?, ?, ?, ?, ?)`,
+        [
+            token,
+            roomId,
+            userId,
+            now.toISOString(),
+            new Date(now.getTime() + INVITE_TTL_MS).toISOString(),
+        ]
     );
 
     return { token, roomId, expiresAt: new Date(now.getTime() + INVITE_TTL_MS).toISOString() };
@@ -148,95 +156,99 @@ export function createInvite(roomId, userId) {
  * Redeem an invite, adding the caller as a guest. Idempotent for a user who is
  * already a member — re-opening a shared link should not fail.
  */
-export function redeemInvite(token, userId) {
-    const invite = db.prepare('SELECT * FROM room_invites WHERE token = ?').get(token);
+export async function redeemInvite(token, userId) {
+    const invite = await db.get('SELECT * FROM room_invites WHERE token = ?', [token]);
     if (!invite) throw new RoomError('Invite is invalid.', 404);
 
-    if (isMember(invite.room_id, userId)) {
-        return { room: getRoom(invite.room_id), alreadyMember: true };
+    if (await isMember(invite.room_id, userId)) {
+        return { room: await getRoom(invite.room_id), alreadyMember: true };
     }
 
     if (invite.used_at) throw new RoomError('Invite has already been used.', 410);
     if (new Date(invite.expires_at) < new Date()) throw new RoomError('Invite has expired.', 410);
-    if (countMembers(invite.room_id) >= ROOM_CAPACITY) {
+    if ((await countMembers(invite.room_id)) >= ROOM_CAPACITY) {
         throw new RoomError(`Room is full (maximum ${ROOM_CAPACITY} members).`, 409);
     }
 
     const now = new Date().toISOString();
-    db.transaction(() => {
-        db.prepare(
+    await db.tx(async (t) => {
+        await t.run(
             `INSERT INTO room_members (room_id, user_id, role, joined_at)
-             VALUES (?, ?, 'guest', ?)`
-        ).run(invite.room_id, userId, now);
-        db.prepare('UPDATE room_invites SET used_at = ?, used_by = ? WHERE token = ?')
-            .run(now, userId, token);
-    })();
+             VALUES (?, ?, 'guest', ?)`,
+            [invite.room_id, userId, now]
+        );
+        await t.run('UPDATE room_invites SET used_at = ?, used_by = ? WHERE token = ?', [
+            now,
+            userId,
+            token,
+        ]);
+    });
 
-    return { room: getRoom(invite.room_id), alreadyMember: false };
+    return { room: await getRoom(invite.room_id), alreadyMember: false };
 }
 
-export function listInvites(roomId, userId) {
-    if (!isOwner(roomId, userId)) {
+export async function listInvites(roomId, userId) {
+    if (!(await isOwner(roomId, userId))) {
         throw new RoomError('Only the room owner can list invites.', 403);
     }
-    return db
-        .prepare(
-            `SELECT token, created_at, expires_at, used_at
-               FROM room_invites WHERE room_id = ? ORDER BY created_at DESC`
-        )
-        .all(roomId)
-        .map((row) => ({
+    const rows = await db.all(
+        `SELECT token, created_at, expires_at, used_at
+           FROM room_invites WHERE room_id = ? ORDER BY created_at DESC`,
+        [roomId]
+    );
+    return rows.map((row) => ({
             token: row.token,
             createdAt: row.created_at,
             expiresAt: row.expires_at,
-            usedAt: row.used_at,
-        }));
+        usedAt: row.used_at,
+    }));
 }
 
-export function revokeInvite(roomId, token, userId) {
-    if (!isOwner(roomId, userId)) {
+export async function revokeInvite(roomId, token, userId) {
+    if (!(await isOwner(roomId, userId))) {
         throw new RoomError('Only the room owner can revoke invites.', 403);
     }
-    const result = db
-        .prepare('DELETE FROM room_invites WHERE room_id = ? AND token = ? AND used_at IS NULL')
-        .run(roomId, token);
+    const result = await db.run(
+        'DELETE FROM room_invites WHERE room_id = ? AND token = ? AND used_at IS NULL',
+        [roomId, token]
+    );
     if (result.changes === 0) throw new RoomError('No such pending invite.', 404);
 }
 
 /** Owner removes a guest, or a guest removes themselves. Owners cannot leave. */
-export function removeMember(roomId, targetUserId, actingUserId) {
-    if (isOwner(roomId, targetUserId)) {
+export async function removeMember(roomId, targetUserId, actingUserId) {
+    if (await isOwner(roomId, targetUserId)) {
         throw new RoomError('The owner cannot be removed; delete the room instead.', 400);
     }
-    if (targetUserId !== actingUserId && !isOwner(roomId, actingUserId)) {
+    if (targetUserId !== actingUserId && !(await isOwner(roomId, actingUserId))) {
         throw new RoomError('Only the room owner can remove other members.', 403);
     }
-    const result = db
-        .prepare('DELETE FROM room_members WHERE room_id = ? AND user_id = ?')
-        .run(roomId, targetUserId);
+    const result = await db.run('DELETE FROM room_members WHERE room_id = ? AND user_id = ?', [
+        roomId,
+        targetUserId,
+    ]);
     if (result.changes === 0) throw new RoomError('That user is not a member of this room.', 404);
 }
 
-export function deleteRoom(roomId, userId) {
-    if (!isOwner(roomId, userId)) {
+export async function deleteRoom(roomId, userId) {
+    if (!(await isOwner(roomId, userId))) {
         throw new RoomError('Only the room owner can delete a room.', 403);
     }
     // Members and invites cascade; the room's Yjs documents are removed
     // separately by the caller (see services/yjsService.js).
-    db.prepare('DELETE FROM rooms WHERE id = ?').run(roomId);
+    await db.run('DELETE FROM rooms WHERE id = ?', [roomId]);
 }
 
 /** Rooms untouched for longer than `maxAgeMs`. Drives the retention sweep. */
-export function listStaleRooms(maxAgeMs) {
+export async function listStaleRooms(maxAgeMs) {
     const cutoff = new Date(Date.now() - maxAgeMs).toISOString();
-    return db
-        .prepare('SELECT * FROM rooms WHERE last_active_at < ?')
-        .all(cutoff)
-        .map(publicRoom);
+    const rows = await db.all('SELECT * FROM rooms WHERE last_active_at < ?', [cutoff]);
+    return rows.map(publicRoom);
 }
 
-export function pruneInvites() {
-    return db
-        .prepare('DELETE FROM room_invites WHERE expires_at < ?')
-        .run(new Date().toISOString()).changes;
+export async function pruneInvites() {
+    const result = await db.run('DELETE FROM room_invites WHERE expires_at < ?', [
+        new Date().toISOString(),
+    ]);
+    return result.changes;
 }

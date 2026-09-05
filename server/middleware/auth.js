@@ -13,14 +13,14 @@ function bearerToken(req) {
 }
 
 /** Rejects the request unless it carries a valid access token. */
-export function requireAuth(req, res, next) {
+export async function requireAuth(req, res, next) {
     const token = bearerToken(req);
     if (!token) {
         return res.status(401).json({ error: 'Authentication required.' });
     }
 
     try {
-        req.user = verifyAccessToken(token);
+        req.user = await verifyAccessToken(token);
         return next();
     } catch (error) {
         return res.status(error.status || 401).json({ error: error.message });
@@ -33,7 +33,7 @@ export function requireAuth(req, res, next) {
  * attached to the socket and is the only identity the server trusts —
  * client-supplied usernames are ignored everywhere downstream.
  */
-export function socketAuth(socket, next) {
+export async function socketAuth(socket, next) {
     const token =
         socket.handshake.auth?.token ||
         (socket.handshake.headers?.authorization || '').replace(/^Bearer /, '');
@@ -43,7 +43,7 @@ export function socketAuth(socket, next) {
     }
 
     try {
-        socket.data.user = verifyAccessToken(token);
+        socket.data.user = await verifyAccessToken(token);
         return next();
     } catch (error) {
         return next(new Error(error.message));

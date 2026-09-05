@@ -58,7 +58,10 @@ acceptable here because Dobby renders no user content as HTML (§6). Moving to
 places, and the reason there are four is that they are genuinely different
 transports:
 
-1. **REST** — `requireAuth` then a membership check per `:roomId` route.
+1. **REST** — `requireAuth` then a membership check per `:roomId` route. The
+   file and history routes mount *inside* that check rather than beside it, so
+   they inherit it and cannot be reached by a non-member — and cannot forget to
+   re-implement it.
 2. **Socket handshake** — `socketAuth` rejects the connection outright.
 3. **Socket events** — every in-room handler re-checks membership on each event,
    because membership can be revoked while a socket is connected.
@@ -78,6 +81,12 @@ room" from "not your room" would let a caller enumerate which rooms exist.
 
 **Invites are single-use and expire in 24 hours**, are issued only by the owner,
 and are refused once the room is at its two-member capacity.
+
+**Within a room, there is no per-file ownership.** Both members can create,
+rename, and delete anything in the tree. That is deliberate — a pairing session
+is two people working on one workspace, and a permission split would be
+ceremony without a threat it defends against, given both parties were
+deliberately invited.
 
 ## 4. The terminal
 
@@ -143,7 +152,9 @@ Every client-supplied payload is validated before it is acted on or relayed.
 | `POST /api/execute` | 100k-char cap on `code` and `stdin`; `filename` restricted to a simple name |
 | Socket payloads | Every event validated by a zod schema; failures return `socket:error` to the sender and are not broadcast |
 | Chat messages | 4,000-char cap; **author and timestamp assigned by the server** from the authenticated socket, so nobody can post as their partner |
-| Whiteboard strokes | Strict two-point segment schema plus a 64kb cap |
+| File names | One path segment, 120 chars: separators, control characters, and `.`/`..` are rejected, so `parent_id` stays the only expression of hierarchy and a name cannot express a traversal |
+| File tree size | `MAX_FILES_PER_ROOM` (200) and `MAX_TREE_DEPTH` (12), which also bound the recursive subtree walks |
+| Whiteboard strokes | No longer a relayed event — strokes are Yjs updates, bounded by the frame ceiling below and gated by the namespace check |
 | WebRTC signals | 128kb cap, and both ends must be in the same room — signals used to be relayed to any socket id the sender named |
 | Terminal input | 8kb per event |
 | Socket frames | 1MB ceiling via `maxHttpBufferSize` |
@@ -160,16 +171,27 @@ is a property of the current components, not an enforced invariant.
 | `/api/auth/*` | 10 attempts per 15 minutes — slow enough to make online password guessing impractical |
 | `/api/execute` | 20 per minute |
 | Everything else under `/api` | 300 per minute |
-| Socket events | Per-socket token buckets, sized per event (chat 2/s, strokes 120/s, `terminal:create` 1 per 10s) |
+| Socket events | Per-socket token buckets, sized per event (chat 2/s, `terminal:input` 200/s, `terminal:create` 1 per 10s) |
+| Yjs namespaces | Not covered by the buckets: bounded by `maxHttpBufferSize` and by the membership check on the namespace |
 
 Express limiters do not apply to Socket.IO — once the connection is upgraded,
 events bypass the HTTP stack entirely — which is why the socket buckets exist
 separately. Limits key on the authenticated user id where there is one, falling
 back to a normalized client IP.
 
-Both limiters are **in-process**, which is correct for the single-node
-deployment Dobby supports. A second replica would make them per-replica; see
-[06 Roadmap](./06-roadmap.md), Phase 4.
+The two halves scale differently, and only one of them needed moving.
+
+**REST limits are per user, and a user's requests can land on any replica**, so
+in-process counters would multiply every published quota by the replica count —
+20 executions a minute becomes 60 on three nodes, which is not a limit. These
+use a shared Redis store when `REDIS_URL` is set.
+
+**Socket limits are per socket, and a socket lives on exactly one node for its
+whole life.** A per-socket bucket is therefore already cluster-correct: there is
+no second process holding a second bucket for the same connection, because there
+is no second connection. It stays in process memory deliberately — moving it to
+Redis would add a network round trip to every keystroke of terminal input to
+defend a property it already has.
 
 ## 8. CORS
 
@@ -184,13 +206,56 @@ stop a script, a curl invocation, or anything else that simply omits the
 `Origin` header. It is a defense against a malicious web page acting through a
 victim's browser, not an access control — that is what §2 and §3 are for.
 
+## 8.1 The metrics endpoint
+
+`/metrics` is a second unauthenticated-looking surface and is deliberately not
+one. It reports active rooms, connected sockets, live PTYs, and document sizes —
+an inventory of who is using the instance and how much — so unlike `/health` it
+is guarded: a bearer token when `METRICS_TOKEN` is set, and **loopback callers
+only** when it is not. The default is closed to the network rather than open,
+because a fail-open default would publish that inventory from the first
+deployment that forgot a variable.
+
+The token is compared in constant time and is not a user account. A scraper has
+no account, and giving it one would mean a long-lived password sitting in a
+Prometheus config.
+
+`deploy/nginx.conf` returns 404 for `/metrics` rather than proxying it, which is
+mostly a correctness measure — a balanced scrape returns one replica's numbers
+at random — but it also means the endpoint is not exposed publicly by the
+reference configuration.
+
+## 8.2 The Yjs routing hint
+
+Clustered deployments have the client append `?doc=<roomId>:<fileId>` to its Yjs
+connection so a load balancer can hash on it. It is worth being explicit that
+**this is a hint and carries no authority**: the server takes both the room it
+authorizes against and the document it takes a lease on from the namespace the
+client actually connected to, never from the query string. A client that lies
+about `doc` misroutes itself and gains nothing — it is refused by the membership
+check exactly as before, and by the lease if it lands on the wrong node.
+
+The lease is checked *after* membership, deliberately. Taking a lease for a
+request that was going to be rejected anyway would let a non-member evict a
+document from the node legitimately serving it — a denial of service dressed up
+as routing.
+
 ## 9. Data at rest
 
 | Store | Contents | Encryption | Retention |
 |---|---|---|---|
-| SQLite (`server/.data/`) | Accounts, rooms, memberships, invites | None | Rooms deleted after 90 days idle |
-| LevelDB (`server/.yjs-persistence/`) | Yjs document state | None | Deleted with their room |
-| Memory | Chat, whiteboard, terminal scrollback | — | 30 min after a room empties |
+| The relational store — SQLite in `server/.data/`, or Postgres | Accounts, rooms, memberships, invites, **file tree, chat transcripts, document snapshots** | None | Rooms deleted after 90 days idle; everything room-scoped cascades with them |
+| LevelDB (`server/.yjs-persistence/`) | Yjs document state — file contents and whiteboard strokes | None | Deleted with their room, or with their file |
+| Browser IndexedDB | A local replica of each document the user has opened | None | Until the browser's site data is cleared |
+| Memory | Language selection, terminal scrollback | — | 30 min after a room empties |
+
+Two of those rows are new with Phase 3 and change the exposure. **Chat and the
+whiteboard are now on disk**: what used to evaporate when a room emptied now
+persists until the room is deleted, so a stolen `.data` directory yields
+transcripts as well as account records. And **the client keeps a copy of every
+document it has opened in IndexedDB**, which is what makes offline editing work
+— a shared or unattended browser retains room content after sign-out, since
+clearing tokens does not clear the object stores.
 
 Document content used to accumulate on disk forever with no delete path. There
 is now a policy and two mechanisms:
@@ -203,8 +268,15 @@ is now a policy and two mechanisms:
   longer exists, and prunes expired invites and refresh tokens.
 
 Passwords are bcrypt-hashed and refresh tokens are SHA-256 hashed, so a database
-read yields no usable credential. Everything else in SQLite is plaintext. Both
-directories are gitignored.
+read yields no usable credential. Everything else is plaintext, on either engine.
+Both local directories are gitignored.
+
+Running Postgres moves that data off the host and onto a server with its own
+access control, its own network exposure, and its own backups — which is a
+different security posture rather than a strictly better one. `DATABASE_SSL=true`
+is the switch for a connection the host cannot otherwise verify; the credentials
+live in `DATABASE_URL`, so it belongs in the same place as `JWT_SECRET` and not
+in a compose file.
 
 ## 10. Deployment checklist
 
@@ -217,8 +289,25 @@ directories are gitignored.
 - [ ] Set `TERMINAL_WORKSPACE_ROOT` to a dedicated volume you are willing to lose.
 - [ ] Set `TRUST_PROXY` if you are behind a load balancer, or rate limits will
       treat every user as one client.
-- [ ] Back up `server/.data/` — it holds every account and room. Losing it is
-      unrecoverable; there is no password reset.
+- [ ] Back up the store — `server/.data/` on SQLite, the database itself on
+      Postgres. It holds every account and room, and losing it is unrecoverable;
+      there is no password reset.
+- [ ] If you set `REDIS_URL`, treat Redis as a **database**: it holds document
+      content. Persistence on, `maxmemory-policy noeviction`, and on a private
+      network — it is unauthenticated by default and holds everything anyone has
+      typed.
+- [ ] Set `METRICS_TOKEN` if anything other than a loopback sidecar needs to
+      scrape `/metrics`, and do not expose the endpoint through your load
+      balancer.
+- [ ] If you set `DATABASE_URL`, keep Postgres on a private network, give Dobby
+      its own role rather than a superuser, and set `DATABASE_SSL=true` when the
+      connection crosses anything you do not control. The URL carries the
+      password: treat it like `JWT_SECRET`.
+- [ ] Confirm both routing rules are in place if you run more than one replica —
+      `hash $arg_doc consistent` for documents and `hash $affinity_key
+      consistent` for connections — and alert on
+      `dobby_document_lease_conflicts_total`, which is flat at zero when routing
+      is correct.
 - [ ] Terminate TLS in front of the app. Access tokens travel in headers and
       WebRTC requires a secure context anyway.
 - [ ] Confirm `server/.env` and `client/.env` are untracked.
@@ -244,4 +333,8 @@ directories are gitignored.
 | Password guessing | **Partly mitigated** — bcrypt cost 12, 10 attempts per 15 min. No MFA, no lockout |
 | Token theft via XSS | **Not mitigated** — tokens in `localStorage`; no user content is rendered as HTML today, but that is not enforced |
 | Account takeover via email | **N/A** — no email flows exist, so no reset to hijack. Also means no recovery |
-| Compromise of the SQLite file | **Not mitigated** — unencrypted at rest; credentials are hashed, everything else is not |
+| Compromise of the database — the SQLite file, or the Postgres server | **Not mitigated** — unencrypted at rest; credentials are hashed, everything else (including chat transcripts and the file tree) is not |
+| `DATABASE_URL` leaking through a log or an error | **Partly mitigated** — the startup line prints host, port, and database name only, never the whole URL. Nothing else logs it |
+| A file name used to escape its room or reach the host filesystem | Mitigated — names are one path segment, hierarchy is `parent_id`, and no file row ever becomes a filesystem path: content lives in LevelDB keyed by uuid |
+| One room's file or snapshot read from another | Mitigated — every lookup is scoped by `room_id`, so an id from elsewhere is indistinguishable from one that does not exist |
+| Room content left in a shared browser after sign-out | **Not mitigated** — the IndexedDB replica that makes offline editing possible survives clearing the session |

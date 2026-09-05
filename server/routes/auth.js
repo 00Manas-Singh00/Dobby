@@ -23,9 +23,9 @@ import {
 
 const router = express.Router();
 
-function handle(res, fn) {
+async function handle(res, fn) {
     try {
-        return res.json(fn());
+        return res.json(await fn());
     } catch (error) {
         if (error instanceof AuthError) {
             return res.status(error.status).json({ error: error.message });
@@ -54,14 +54,14 @@ router.post('/refresh', authLimiter, validateBody(refreshSchema), (req, res) =>
 );
 
 /** POST /api/auth/logout — revokes the presented refresh token. */
-router.post('/logout', (req, res) => {
-    revokeRefreshToken(req.body?.refreshToken);
+router.post('/logout', async (req, res) => {
+    await revokeRefreshToken(req.body?.refreshToken);
     res.json({ ok: true });
 });
 
 /** POST /api/auth/logout-all — revokes every session for the caller. */
-router.post('/logout-all', requireAuth, (req, res) => {
-    revokeAllForUser(req.user.id);
+router.post('/logout-all', requireAuth, async (req, res) => {
+    await revokeAllForUser(req.user.id);
     res.json({ ok: true });
 });
 

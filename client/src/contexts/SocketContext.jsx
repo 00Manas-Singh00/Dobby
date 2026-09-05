@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import io from 'socket.io-client';
 import { toast } from 'sonner';
 import { getAccessToken, onTokenChange, API_BASE_URL } from '@/services/apiClient';
+import { getClientId } from '@/services/clientId';
 
 const SocketContext = createContext(null);
 
@@ -25,6 +26,12 @@ export const SocketProvider = ({ children }) => {
         const serverUrl = import.meta.env.VITE_SOCKET_URL || API_BASE_URL;
         return io(serverUrl, {
             auth: { token },
+            // A routing hint for the load balancer, not a credential: one
+            // connection has to keep reaching one replica, and hashing on the
+            // client's address gets that wrong behind a CDN. See
+            // services/clientId.js and deploy/nginx.conf. Ignored entirely by a
+            // single-node deployment.
+            query: { client: getClientId() },
             // The token is short-lived, so a stale one must not be retried
             // forever; apiClient's refresh will supply a new one and remount.
             reconnectionAttempts: 5,

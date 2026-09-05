@@ -1,16 +1,16 @@
 # 01 — Product Overview
 
 **Project:** Dobby — a cloud-based IDE for pair programming
-**Status:** v0.9, authenticated (Phase 1 complete)
+**Status:** v1.0 — Phases 1–3 complete: authenticated, tested, and a real workspace
 
 ---
 
 ## 1. What Dobby is
 
 Dobby is a browser-based workspace where two people write, run, and talk through
-code together in real time. One person opens a room, shares the URL, and the
-other lands in the same editor, the same terminal, the same whiteboard, and a
-video call — without installing anything.
+code together in real time. One person opens a room, sends a single-use invite
+link, and the other lands in the same files, the same terminal, the same
+whiteboard, and a video call — without installing anything.
 
 The product bet is **integration, not any single feature**. A collaborative
 editor exists elsewhere; a browser terminal exists elsewhere; a video call
@@ -38,44 +38,54 @@ product decision, not a temporary limit — see [ADR-006](./07-adrs.md#adr-006).
 | Feature | State | Notes |
 |---|---|---|
 | Collaborative code editor | **Working** | Monaco + Yjs CRDT, per-file documents, live cursors |
-| Multi-file tabs & explorer | **Partial** | Tabs and editing work; the file tree is a hardcoded mock |
-| Code execution | **Working** | Piston API, ~40 languages, stdin supported |
+| Multi-file tabs & explorer | **Working** | A real per-room tree: create, rename, move, delete, folders. Changes reach the other person live |
+| Offline editing | **Working** | `y-indexeddb`; edits made while disconnected survive a closed tab and merge on return |
+| Document history | **Working** | Periodic snapshots per file, with preview and restore |
+| Code execution | **Working** | Piston API, ~40 languages, stdin supported. Output is per file |
 | Integrated terminal | **Working, off by default** | Real PTY; gated behind `ENABLE_TERMINAL` — see [04](./04-security-model.md) |
-| Chat | **Working** | In-memory history, last 100 messages replayed on join |
-| Whiteboard | **Working** | Canvas strokes relayed over Socket.IO; not persisted |
+| Chat | **Working** | Persisted in the database; last 100 messages replayed on join |
+| Whiteboard | **Working** | Strokes are a Yjs `Y.Array` — replayed to a late joiner and persisted |
 | Video / audio call | **Working** | WebRTC P2P via simple-peer, Socket.IO signaling |
 | Presence / user list | **Working** | Room roster plus Yjs awareness cursors |
-| Layout persistence | **Working** | Panel sizes, active module, editor view state in localStorage |
-| **Authentication** | **Absent** | Anyone with a room URL is in the room |
-| **Authorization / roles** | **Absent** | No viewer/editor distinction |
-| **Persistent rooms** | **Partial** | Editor content survives restarts via LevelDB; chat and whiteboard do not |
-| **Tests** | **Absent** | No unit, integration, or E2E tests exist |
+| Layout persistence | **Working** | Panel sizes, active module, open tabs, editor view state in localStorage |
+| **Authentication** | **Working** | Email/password, bcrypt, JWT access + rotating refresh tokens |
+| **Authorization** | **Working** | Rooms have an owner; joining needs a single-use invite. No viewer/editor distinction within a room — see [04 §3](./04-security-model.md) |
+| **Persistent rooms** | **Working** | Files, chat, whiteboard, and document history all survive a restart |
+| **Tests** | **Working** | 327 server tests, run twice per push — once on SQLite, once on Postgres — including a two-replica suite against a real Redis, plus 16 two-browser end-to-end tests |
+| **Horizontal scale** | **Working** | `REDIS_URL` turns one process into a cluster; `DATABASE_URL` lets those replicas be on different hosts. A document is served by exactly one replica by design. Two-host *performance* is untested — see [09 §7](./09-load-test.md#7-what-this-does-not-cover) |
+| **Observability** | **Working** | Prometheus metrics, a Grafana dashboard, and published load-test numbers — [08](./08-observability.md), [09](./09-load-test.md) |
 
 ## 4. What Dobby explicitly is not
 
 - **Not a hosted dev environment.** The terminal is a convenience for running
   scratch commands, not a container platform. There is no per-user isolation
   beyond a scratch directory.
-- **Not multi-tenant.** No accounts, no ownership, no billing, no quotas.
+- **Not multi-tenant.** There are accounts and room ownership, but no billing
+  and no per-user quotas beyond the rate limits.
 - **Not a group tool.** Two people per room.
-- **Not offline-capable.** Yjs makes this achievable, but no IndexedDB
-  persistence is wired up, so a disconnected client loses unsent edits.
+- **Not a file host.** The tree is capped at 200 nodes per room and there is no
+  upload or download — it is somewhere to write code together, not somewhere to
+  keep a project.
 
 ## 5. Known product-level gaps
 
-These are the things that would block calling Dobby v1, in rough priority order:
+In rough priority order:
 
-1. **The file explorer is a mock.** [`FileExplorer.jsx`](../client/src/components/workspace/FileExplorer.jsx)
-   renders a hardcoded tree; opening a file creates a placeholder buffer rather
-   than reading anything real. Users can edit and share files, but not create,
-   rename, or delete them.
-2. **Chat and whiteboard aren't durable.** Both live in server memory and are
-   cleared 30 minutes after a room empties. A refresh mid-session is fine; a
-   server restart is not.
-3. **Single-node only.** Socket.IO rooms, chat, and the rate limiters are all
-   in-process, so the server cannot be scaled horizontally.
-4. **Identity is minimal.** Accounts exist, but there is no email verification,
+1. **Two-host performance is unmeasured.** Replicas can be on separate hosts
+   now — the store is Postgres when `DATABASE_URL` is set, and two real replicas
+   against a real Postgres are tested for correctness — but every published
+   number was taken on one machine, where two replicas compete for the cores
+   that are the binding constraint. The capacity of a genuinely distributed
+   deployment is unknown; see [09 §7](./09-load-test.md#7-what-this-does-not-cover).
+2. **Terminal sessions are pinned to a node.** A PTY is a live process rather
+   than data, so it cannot follow a user to another replica; a cluster needs
+   sticky sessions on the main namespace.
+3. **Identity is minimal.** Accounts exist, but there is no email verification,
    password reset, or MFA. Account recovery is a manual database operation.
+4. **Whiteboard strokes are absolute pixel coordinates,** so two people at very
+   different window sizes see the board positioned differently.
+5. **There is no migration from an existing SQLite file into Postgres.**
+   Switching engines today means starting with an empty database.
 
 ## 6. Success criteria
 
@@ -90,3 +100,8 @@ Dobby is doing its job when two people can:
 
 The first three hold today. The fourth holds for the length of a session but not
 across a restart.
+
+There is now a measured statement behind the first two: one node carries 200
+concurrent pairs — 400 users at 1,600 edits per second — with a 3.6 ms median
+propagation latency, a 13.8 ms p95, and no lost updates
+([09](./09-load-test.md)). The product has never needed a fraction of that.

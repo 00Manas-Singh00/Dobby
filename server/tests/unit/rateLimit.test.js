@@ -40,42 +40,42 @@ describe('allowSocketEvent', () => {
     it('allows a burst up to the bucket capacity and then refuses', () => {
         const socket = fakeSocket();
 
-        expect(drain(socket, 'clear canvas')).toBe(5);
-        expect(allowSocketEvent(socket, 'clear canvas')).toBe(false);
+        expect(drain(socket, 'terminal:create')).toBe(5);
+        expect(allowSocketEvent(socket, 'terminal:create')).toBe(false);
     });
 
     it('tells the sender when the budget runs out', () => {
         const socket = fakeSocket();
-        drain(socket, 'clear canvas');
-        allowSocketEvent(socket, 'clear canvas');
+        drain(socket, 'terminal:create');
+        allowSocketEvent(socket, 'terminal:create');
 
         expect(socket.emitted.at(-1)).toEqual({
             event: 'socket:error',
-            payload: { event: 'clear canvas', message: expect.stringMatching(/rate limit/i) },
+            payload: { event: 'terminal:create', message: expect.stringMatching(/rate limit/i) },
         });
     });
 
     it('refills over time at the configured rate', () => {
         const socket = fakeSocket();
-        drain(socket, 'clear canvas');
+        drain(socket, 'terminal:create');
 
-        // 0.2 tokens/second: five seconds buys exactly one more event.
-        vi.advanceTimersByTime(5_000);
-        expect(allowSocketEvent(socket, 'clear canvas')).toBe(true);
-        expect(allowSocketEvent(socket, 'clear canvas')).toBe(false);
+        // 0.1 tokens/second: ten seconds buys exactly one more event.
+        vi.advanceTimersByTime(10_000);
+        expect(allowSocketEvent(socket, 'terminal:create')).toBe(true);
+        expect(allowSocketEvent(socket, 'terminal:create')).toBe(false);
     });
 
     it('never refills past the burst capacity', () => {
         const socket = fakeSocket();
-        drain(socket, 'clear canvas');
+        drain(socket, 'terminal:create');
 
         vi.advanceTimersByTime(60 * 60 * 1000); // an hour of idling
-        expect(drain(socket, 'clear canvas')).toBe(5);
+        expect(drain(socket, 'terminal:create')).toBe(5);
     });
 
     it('budgets each event class separately', () => {
         const socket = fakeSocket();
-        drain(socket, 'clear canvas');
+        drain(socket, 'terminal:create');
 
         // Exhausting one event must not silence the socket entirely.
         expect(allowSocketEvent(socket, 'send_message')).toBe(true);
@@ -84,21 +84,21 @@ describe('allowSocketEvent', () => {
     it('budgets each socket separately', () => {
         const one = fakeSocket();
         const two = fakeSocket();
-        drain(one, 'clear canvas');
+        drain(one, 'terminal:create');
 
-        expect(allowSocketEvent(two, 'clear canvas')).toBe(true);
+        expect(allowSocketEvent(two, 'terminal:create')).toBe(true);
     });
 
-    it('gives drawing a ceiling high enough for real mouse input', () => {
+    it('gives keystroke-rate events a ceiling high enough for real typing', () => {
         const socket = fakeSocket();
-        // Strokes arrive per mousemove; the limit exists to stop a scripted
-        // flood, not to shape normal drawing.
-        expect(drain(socket, 'draw')).toBe(200);
+        // Terminal input arrives per keypress; the limit exists to stop a
+        // scripted flood, not to shape normal typing.
+        expect(drain(socket, 'terminal:input')).toBe(500);
     });
 
     it('gives terminal creation a deliberately tight budget', () => {
         const socket = fakeSocket();
-        // Each one may spawn a container.
+        // Each one may spawn a container. (Also the exemplar above: capacity 5.)
         expect(drain(socket, 'terminal:create')).toBe(5);
     });
 });

@@ -13,6 +13,13 @@ const FILE_ICONS = {
     markdown: { icon: FileType, color: 'text-black stroke-[3]' },
 };
 
+/**
+ * Tabs for the open files.
+ *
+ * Each tab is a node from the file tree rather than a buffer of its own, so a
+ * rename by either person retitles the tab and a delete closes it — neither
+ * needs handling here.
+ */
 const EditorTabs = () => {
     const { editorState, setActiveFile, closeFile } = useWorkspace();
     const { openFiles, activeFileId } = editorState;
@@ -26,6 +33,16 @@ const EditorTabs = () => {
         e.stopPropagation();
         closeFile(fileId);
     };
+
+    if (openFiles.length === 0) {
+        return (
+            <div className="h-12 bg-white border-b-4 border-black flex items-center px-4 font-mono">
+                <span className="text-xs font-bold uppercase tracking-widest text-black/60">
+                    No open files
+                </span>
+            </div>
+        );
+    }
 
     return (
         <div className="h-12 bg-white border-b-4 border-black flex items-center overflow-x-auto scrollbar-thin font-mono">

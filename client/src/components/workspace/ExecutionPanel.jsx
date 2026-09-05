@@ -2,6 +2,11 @@
  * components/workspace/ExecutionPanel.jsx
  * Displays code execution results: stdout, stderr, exit code, timing, compile errors.
  * Rendered below the editor when execution completes or is in progress.
+ *
+ * The panel is scoped to one file. It used to be shared across the whole
+ * workspace, so switching tabs left the previous file's output on screen with
+ * nothing to say it did not belong to the file now in front of you — hence the
+ * filename in the header.
  */
 
 import { useRef, useEffect } from 'react';
@@ -17,6 +22,7 @@ import { cn } from '@/lib/utils';
 
 /**
  * @param {object} props
+ * @param {string}       props.fileName   - The file this output belongs to
  * @param {boolean}      props.isRunning  - Show loading state
  * @param {object|null}  props.result     - Execution result from server
  * @param {string|null}  props.error      - Client/network error
@@ -24,7 +30,7 @@ import { cn } from '@/lib/utils';
  * @param {string}       props.stdin      - Current stdin value
  * @param {function}     props.onStdinChange - Stdin change callback
  */
-const ExecutionPanel = ({ isRunning, result, error, onClear, stdin, onStdinChange }) => {
+const ExecutionPanel = ({ fileName, isRunning, result, error, onClear, stdin, onStdinChange }) => {
     const outputRef = useRef(null);
 
     // Scroll output to bottom on new content
@@ -48,6 +54,14 @@ const ExecutionPanel = ({ isRunning, result, error, onClear, stdin, onStdinChang
                     <span className="text-sm font-black text-black uppercase tracking-widest">
                         Output
                     </span>
+                    {fileName && (
+                        <span
+                            className="text-xs font-bold text-black truncate max-w-[14rem]"
+                            title={fileName}
+                        >
+                            {fileName}
+                        </span>
+                    )}
                     {result && (
                         <>
                             {/* Exit code badge */}

@@ -17,6 +17,36 @@ jobs:
     defaults:
       run:
         working-directory: server
+    # The cluster suite needs a real Redis. Faking it would be self-defeating:
+    # the failures it guards against live in the adapter's wire format, in
+    # SET NX PX semantics, and in whether fetchSockets really crosses replicas.
+    # Without REDIS_URL that file skips itself, so this service is what makes the
+    # difference between the suite running and the suite pretending.
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      # Likewise for Postgres: the suite runs twice, once per engine. A stub
+      # would verify the SQL this project writes against nothing.
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: dobby
+          POSTGRES_PASSWORD: dobby
+          POSTGRES_DB: dobby_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dobby"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
 
@@ -30,7 +60,23 @@ jobs:
       # from source when no prebuilt binary matches the runner.
       - run: npm ci
 
+      # SQLite: the default store, and what a contributor gets with no services
+      # running at all.
       - run: npm test
+        env:
+          REDIS_URL: redis://127.0.0.1:6379
+
+      # And again on Postgres. The store is behind one interface with two
+      # drivers, and the whole point of Phase 5 is the second one — so running
+      # the suite only on SQLite would leave every Postgres-specific spelling
+      # (`$n` placeholders, bigint counts, bytea, `lower()` in place of COLLATE
+      # NOCASE) verified by inspection rather than by a test. Same suite, same
+      # assertions, other engine.
+      - name: Run the suite again against Postgres
+        run: npm test
+        env:
+          REDIS_URL: redis://127.0.0.1:6379
+          DATABASE_URL: postgres://dobby:dobby@127.0.0.1:5432/dobby_test
 
   client:
     name: Client — lint & build
@@ -56,7 +102,7 @@ jobs:
       - run: npm run build
 
   e2e:
-    name: End-to-end — two-browser convergence
+    name: End-to-end — two-browser convergence & workspace
     runs-on: ubuntu-latest
     # The slowest job, and it only makes sense once both halves compile.
     needs: [server, client]
@@ -80,8 +126,10 @@ jobs:
         run: npx playwright install --with-deps chromium
         working-directory: client
 
-      # Playwright starts both the API and the Vite dev server itself, so there
-      # is nothing to orchestrate here.
+      # Playwright starts both the API and a production preview build itself,
+      # so there is nothing to orchestrate here. This runs every spec in
+      # client/e2e — editor convergence, the file tree, the whiteboard, and
+      # document history.
       - name: Run end-to-end tests
         run: npm run test:e2e
         working-directory: client

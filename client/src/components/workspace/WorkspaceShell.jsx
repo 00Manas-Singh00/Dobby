@@ -173,7 +173,6 @@ const WorkspaceShellContent = () => {
                     />
                     <WhiteboardWorkspace
                         moduleId="whiteboard"
-                        socket={socket}
                         roomId={roomId}
                     />
                     <ChatWorkspace
@@ -193,9 +192,18 @@ const WorkspaceShellContent = () => {
     );
 };
 
+/**
+ * The provider needs the room and the socket: it owns the file tree, which is
+ * fetched per room and kept current by the room's `files:changed` broadcast.
+ * The room id comes from the route rather than from the inner component, so the
+ * tree starts loading in the same render the room does.
+ */
 const WorkspaceShell = () => {
+    const { roomId } = useParams();
+    const socket = useSocket();
+
     return (
-        <WorkspaceProvider>
+        <WorkspaceProvider roomId={roomId} socket={socket}>
             <WorkspaceShellContent />
         </WorkspaceProvider>
     );
