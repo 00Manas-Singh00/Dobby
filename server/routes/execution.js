@@ -5,6 +5,7 @@
 
 import express from 'express';
 import { execute, getRuntimes } from '../services/pistonService.js';
+import { executeLimiter } from '../middleware/rateLimit.js';
 
 const router = express.Router();
 
@@ -13,15 +14,22 @@ const router = express.Router();
  * Body: { language: string, code: string, stdin?: string, filename?: string }
  * Returns: { stdout, stderr, exitCode, signal, time, language, version, compileOutput? }
  */
-router.post('/execute', async (req, res) => {
+router.post('/execute', executeLimiter, async (req, res) => {
     const { language, code, stdin = '', filename } = req.body;
+
+    if (typeof code !== 'string') {
+        return res.status(400).json({ error: 'Field "code" must be a string.' });
+    }
+    if (typeof stdin !== 'string' || stdin.length > 100_000) {
+        return res.status(400).json({ error: 'Field "stdin" must be a string under 100,000 characters.' });
+    }
+    if (filename !== undefined && (typeof filename !== 'string' || !/^[\w.-]{1,64}$/.test(filename))) {
+        return res.status(400).json({ error: 'Field "filename" must be a simple file name.' });
+    }
 
     // Validate required fields
     if (!language || typeof language !== 'string') {
         return res.status(400).json({ error: 'Missing or invalid "language" field.' });
-    }
-    if (code === undefined || code === null) {
-        return res.status(400).json({ error: 'Missing "code" field.' });
     }
     if (code.length > 100_000) {
         return res.status(400).json({ error: 'Code exceeds maximum size of 100,000 characters.' });

@@ -1,7 +1,6 @@
-import React from 'react';
 import Whiteboard from '../Whiteboard';
 
-const WhiteboardWorkspace = ({ moduleId, socket, roomId }) => {
+const WhiteboardWorkspace = ({ socket, roomId }) => {
     return (
         <div className="w-full h-full">
             <Whiteboard socket={socket} roomId={roomId} />

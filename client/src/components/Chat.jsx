@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -6,7 +6,10 @@ import { Send, Smile } from 'lucide-react';
 
 const Chat = ({ socket, roomId, username }) => {
     const [messages, setMessages] = useState([]);
-    const [input, setInput] = useState("");
+    const [input, setInput] = useState(() => {
+        if (!roomId) return '';
+        return sessionStorage.getItem(`dobby_room_${roomId}_chat_draft`) || '';
+    });
     const messagesEndRef = useRef(null);
     const messagesContainerRef = useRef(null);
 
@@ -19,8 +22,30 @@ const Chat = ({ socket, roomId, username }) => {
     }, [messages]);
 
     useEffect(() => {
+        if (!roomId) return;
+        sessionStorage.setItem(`dobby_room_${roomId}_chat_draft`, input);
+    }, [roomId, input]);
+
+    useEffect(() => {
         if (!socket) return;
 
+        const mergeByMessageId = (existing, incoming) => {
+            const seen = new Set(existing.map((msg) => msg.messageId));
+            const merged = [...existing];
+            for (const msg of incoming) {
+                if (msg?.messageId && seen.has(msg.messageId)) continue;
+                if (msg?.messageId) seen.add(msg.messageId);
+                merged.push(msg);
+            }
+            return merged;
+        };
+
+        const handleChatHistory = ({ messages: history }) => {
+            if (!Array.isArray(history)) return;
+            setMessages((prev) => mergeByMessageId([], [...history, ...prev]));
+        };
+
+        socket.on("chat history", handleChatHistory);
         socket.on("receive_message", (messageData) => {
             setMessages((prev) => {
                 if (messageData?.messageId && prev.some((msg) => msg.messageId === messageData.messageId)) {
@@ -31,6 +56,7 @@ const Chat = ({ socket, roomId, username }) => {
         });
 
         return () => {
+            socket.off("chat history", handleChatHistory);
             socket.off("receive_message");
         };
     }, [socket]);
@@ -38,15 +64,13 @@ const Chat = ({ socket, roomId, username }) => {
     const sendMessage = (e) => {
         e.preventDefault();
         if (input.trim() && socket) {
-            const msgData = {
-                message: input,
-                roomId,
-                username,
-                timestamp: new Date().toISOString()
-            };
-
-            socket.emit("send_message", msgData);
+            // Author and timestamp are assigned by the server from the
+            // authenticated socket — sending them here would be ignored.
+            socket.emit("send_message", { message: input, roomId });
             setInput("");
+            if (roomId) {
+                sessionStorage.removeItem(`dobby_room_${roomId}_chat_draft`);
+            }
         }
     };
 

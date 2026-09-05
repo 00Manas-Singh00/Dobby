@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E '\\\\.\\(js|jsx\\)$')",
+      "Bash(node --check index.js)",
+      "Bash(node --check terminalManager.js)",
+      "Bash(docker info *)",
+      "Bash(node -e \"import\\('express-rate-limit'\\).then\\(m=>console.log\\(Object.keys\\(m\\)\\)\\)\")",
+      "Bash(python3 -)"
+    ]
+  }
+}

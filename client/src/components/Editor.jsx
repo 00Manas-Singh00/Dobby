@@ -2,24 +2,19 @@
  * components/Editor.jsx
  * Collaborative Monaco code editor.
  * Features:
- *  - Real-time code sync via Socket.IO
- *  - Language selector (from LANGUAGE_MAP)
+ *  - Real-time code sync via Yjs CRDT (useYjsEditor), one document per open file
+ *  - Language selector (from LANGUAGE_MAP), broadcast room-wide over Socket.IO
  *  - ▶ Run button → code execution via Piston
- *  - AI context menu: "Explain with AI" / "Fix with AI"
  *  - Sync status indicator
  */
 
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import Editor from '@monaco-editor/react';
 import {
     Play,
     Loader2,
     ChevronDown,
-    Check,
-    Sparkles,
-    Wrench,
-    Lightbulb,
-} from 'lucide-react';
+    Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { LANGUAGES, isExecutable } from '@/constants/languageMap';
 import { useYjsEditor } from '@/hooks/useYjsEditor';
@@ -28,17 +23,33 @@ const CodeEditor = ({
     socket,
     roomId,
     username,
+    fileId = 'default',
     theme = 'vs-dark',
     isRunning = false,
-    onRun,
-}) => {
-    const [language, setLanguage] = useState('javascript');
+    onRun }) => {
+    const [language, setLanguage] = useState(() => {
+        if (!roomId) return 'javascript';
+        return localStorage.getItem(`dobby_room_${roomId}_language`) || 'javascript';
+    });
+    // Scoped per file as well as per language — one editor is mounted per open
+    // tab, so a room+language key alone would have them overwrite each other.
+    const getViewStateKey = useCallback(
+        (lang = language) =>
+            roomId ? `dobby_room_${roomId}_file_${fileId}_editor_view_${lang}` : null,
+        [roomId, fileId, language]
+    );
     const [showLangDropdown, setShowLangDropdown] = useState(false);
     const editorRef = useRef(null);
     const monacoRef = useRef(null);
-    
+    const hasRestoredViewStateRef = useRef(false);
+
+    // Mirrored in state (not just the ref) because useYjsEditor keys its effect
+    // on the instance — a ref assignment triggers no re-render, so the binding
+    // would never attach.
+    const [editorInstance, setEditorInstance] = useState(null);
+
     // ── Yjs CRDT Sync ────────────────────────────────────────────────────────
-    const { synced } = useYjsEditor(roomId, editorRef.current, username);
+    const { synced } = useYjsEditor(roomId, editorInstance, username, fileId);
 
     // ── Socket Language Sync ────────────────────────────────────────────────
     useEffect(() => {
@@ -46,6 +57,9 @@ const CodeEditor = ({
 
         const handleLanguageChange = ({ languageUsed }) => {
             setLanguage(languageUsed);
+            if (roomId && languageUsed) {
+                localStorage.setItem(`dobby_room_${roomId}_language`, languageUsed);
+            }
         };
 
         socket.on('on language change', handleLanguageChange);
@@ -58,6 +72,9 @@ const CodeEditor = ({
     const handleLanguageChange = useCallback(
         (newLang) => {
             setLanguage(newLang);
+            if (roomId) {
+                localStorage.setItem(`dobby_room_${roomId}_language`, newLang);
+            }
             setShowLangDropdown(false);
             socket?.emit('update language', { roomId, languageUsed: newLang });
         },
@@ -68,7 +85,57 @@ const CodeEditor = ({
     const handleEditorDidMount = useCallback((editor, monaco) => {
         editorRef.current = editor;
         monacoRef.current = monaco;
-    }, [language]);
+        setEditorInstance(editor);
+
+        const viewStateKey = getViewStateKey(language);
+        const savedRaw = viewStateKey ? localStorage.getItem(viewStateKey) : null;
+        if (savedRaw) {
+            try {
+                const parsed = JSON.parse(savedRaw);
+                editor.restoreViewState(parsed);
+            } catch {
+                // Ignore corrupted view state and continue.
+            }
+        }
+        editor.focus();
+        hasRestoredViewStateRef.current = true;
+
+        const persistViewState = () => {
+            const key = getViewStateKey();
+            if (!key || !editorRef.current) return;
+            const state = editorRef.current.saveViewState();
+            if (state) {
+                localStorage.setItem(key, JSON.stringify(state));
+            }
+        };
+
+        const cursorDisposable = editor.onDidChangeCursorPosition(persistViewState);
+        const selectionDisposable = editor.onDidChangeCursorSelection(persistViewState);
+        const scrollDisposable = editor.onDidScrollChange(persistViewState);
+        const blurDisposable = editor.onDidBlurEditorWidget(persistViewState);
+
+        editor.onDidDispose(() => {
+            cursorDisposable.dispose();
+            selectionDisposable.dispose();
+            scrollDisposable.dispose();
+            blurDisposable.dispose();
+            setEditorInstance(null);
+        });
+    }, [language, getViewStateKey]);
+
+    useEffect(() => {
+        if (!editorRef.current || !hasRestoredViewStateRef.current) return;
+        const viewStateKey = getViewStateKey(language);
+        const savedRaw = viewStateKey ? localStorage.getItem(viewStateKey) : null;
+        if (savedRaw) {
+            try {
+                const parsed = JSON.parse(savedRaw);
+                editorRef.current.restoreViewState(parsed);
+            } catch {
+                // Ignore invalid view state.
+            }
+        }
+    }, [language, getViewStateKey]);
 
     // ── Run handler ──────────────────────────────────────────────────────────
     const handleRun = useCallback(() => {
@@ -187,8 +254,7 @@ const CodeEditor = ({
                         tabSize: 4,
                         renderLineHighlight: 'all',
                         bracketPairColorization: { enabled: true },
-                        contextmenu: true,
-                    }}
+                        contextmenu: true }}
                 />
             </div>
         </div>

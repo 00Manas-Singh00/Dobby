@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Terminal as TerminalIcon, ChevronUp, ChevronDown } from 'lucide-react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
@@ -14,11 +14,27 @@ const TerminalComponent = () => {
     const [isResizing, setIsResizing] = useState(false);
     const socket = useSocket();
     const { roomId } = useParams();
+    // The username is no longer read here: the server resolves the terminal
+    // session's owner from its own room records rather than trusting the client.
 
     const terminalRef = useRef(null);
     const containerRef = useRef(null);
     const xtermRef = useRef(null);
     const fitAddonRef = useRef(null);
+    const currentDraftRef = useRef('');
+    const hadPreviousSessionRef = useRef(false);
+
+    const getTerminalKey = useCallback(
+        (suffix) => (roomId ? `dobby_room_${roomId}_terminal_${suffix}` : null),
+        [roomId]
+    );
+
+    useEffect(() => {
+        if (!roomId) return;
+        const savedDraft = sessionStorage.getItem(getTerminalKey('draft')) || '';
+        currentDraftRef.current = savedDraft;
+        hadPreviousSessionRef.current = sessionStorage.getItem(getTerminalKey('had_session')) === 'true';
+    }, [roomId, getTerminalKey]);
 
     // Initialize xterm.js
     useEffect(() => {
@@ -71,11 +87,27 @@ const TerminalComponent = () => {
 
         // Request terminal creation from backend
         if (socket) {
+            // The server derives the session's username from its own room
+            // records; sending one here would let a client pick any session.
             socket.emit('terminal:create', { roomId });
         }
 
         // Handle terminal input
         term.onData((data) => {
+            // Keep a lightweight command draft buffer so refreshes can recover intent.
+            if (data === '\r') {
+                currentDraftRef.current = '';
+            } else if (data === '\u007f') {
+                currentDraftRef.current = currentDraftRef.current.slice(0, -1);
+            } else if (data >= ' ' && data <= '~') {
+                currentDraftRef.current += data;
+            }
+
+            const draftKey = getTerminalKey('draft');
+            if (draftKey) {
+                sessionStorage.setItem(draftKey, currentDraftRef.current);
+            }
+
             if (socket) {
                 socket.emit('terminal:input', { data });
             }
@@ -87,7 +119,7 @@ const TerminalComponent = () => {
             xtermRef.current = null;
             fitAddonRef.current = null;
         };
-    }, [terminalCollapsed, socket, roomId]);
+    }, [terminalCollapsed, socket, roomId, getTerminalKey]);
 
     // Handle socket events
     useEffect(() => {
@@ -99,9 +131,19 @@ const TerminalComponent = () => {
             }
         };
 
-        const handleReady = ({ message }) => {
+        const handleReady = () => {
             if (xtermRef.current) {
                 xtermRef.current.writeln('\x1b[1;36mTerminal ready. Type your commands here.\x1b[0m');
+                if (hadPreviousSessionRef.current) {
+                    xtermRef.current.writeln('\x1b[1;33mReconnected: terminal process restarted. Previous shell output is not persisted yet.\x1b[0m');
+                    if (currentDraftRef.current) {
+                        xtermRef.current.writeln(`\x1b[1;33mRecovered draft:\x1b[0m ${currentDraftRef.current}`);
+                    }
+                }
+                const hadSessionKey = getTerminalKey('had_session');
+                if (hadSessionKey) {
+                    sessionStorage.setItem(hadSessionKey, 'true');
+                }
             }
         };
 
@@ -111,16 +153,24 @@ const TerminalComponent = () => {
             }
         };
 
+        const handleError = ({ message }) => {
+            if (xtermRef.current) {
+                xtermRef.current.writeln(`\r\n\x1b[1;31m${message}\x1b[0m`);
+            }
+        };
+
         socket.on('terminal:output', handleOutput);
         socket.on('terminal:ready', handleReady);
         socket.on('terminal:exit', handleExit);
+        socket.on('terminal:error', handleError);
 
         return () => {
             socket.off('terminal:output', handleOutput);
             socket.off('terminal:ready', handleReady);
             socket.off('terminal:exit', handleExit);
+            socket.off('terminal:error', handleError);
         };
-    }, [socket]);
+    }, [socket, getTerminalKey]);
 
     // Handle resize events
     useEffect(() => {

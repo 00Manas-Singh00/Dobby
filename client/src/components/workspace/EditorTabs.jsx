@@ -1,4 +1,3 @@
-import React from 'react';
 import { X, FileCode, FileJson, FileType, Code2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useWorkspace } from '@/contexts/WorkspaceContext';

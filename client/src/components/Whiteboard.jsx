@@ -1,72 +1,39 @@
-import React, { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { PenTool, Eraser, Trash2, Circle, Square, Minus, Grid3x3, Undo, Redo } from 'lucide-react';
+import { PenTool, Eraser, Trash2, Grid3x3 } from 'lucide-react';
 
 const Whiteboard = ({ socket, roomId }) => {
     const canvasRef = useRef(null);
     const [isDrawing, setIsDrawing] = useState(false);
-    const [color, setColor] = useState("#3b82f6");
-    const [lineWidth, setLineWidth] = useState(3);
-    const [tool, setTool] = useState("pen");
-    const [showGrid, setShowGrid] = useState(false);
+    const [color, setColor] = useState(() => {
+        if (!roomId) return '#3b82f6';
+        return localStorage.getItem(`dobby_room_${roomId}_wb_color`) || '#3b82f6';
+    });
+    const [lineWidth, setLineWidth] = useState(() => {
+        if (!roomId) return 3;
+        const saved = localStorage.getItem(`dobby_room_${roomId}_wb_line_width`);
+        return saved ? Number(saved) : 3;
+    });
+    const [tool, setTool] = useState(() => {
+        if (!roomId) return 'pen';
+        return localStorage.getItem(`dobby_room_${roomId}_wb_tool`) || 'pen';
+    });
+    const [showGrid, setShowGrid] = useState(() => {
+        if (!roomId) return false;
+        return localStorage.getItem(`dobby_room_${roomId}_wb_show_grid`) === 'true';
+    });
     const prevPos = useRef({ x: 0, y: 0 });
+    const hasRestoredSnapshotRef = useRef(false);
 
-    const colorPresets = [
-        { color: "#3b82f6", name: "Blue" },
-        { color: "#8b5cf6", name: "Purple" },
-        { color: "#ec4899", name: "Pink" },
-        { color: "#10b981", name: "Green" },
-        { color: "#f59e0b", name: "Orange" },
-        { color: "#ef4444", name: "Red" },
-        { color: "#000000", name: "Black" },
-        { color: "#ffffff", name: "White" },
-    ];
-
-    useEffect(() => {
-        if (!socket) return;
-
+    const persistSnapshot = () => {
         const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d');
-
-        const resize = () => {
-            const parent = canvas.parentElement;
-            const tempCanvas = document.createElement('canvas');
-            const tempCtx = tempCanvas.getContext('2d');
-            tempCanvas.width = canvas.width;
-            tempCanvas.height = canvas.height;
-            tempCtx.drawImage(canvas, 0, 0);
-
-            canvas.width = parent.clientWidth;
-            canvas.height = parent.clientHeight;
-
-            ctx.drawImage(tempCanvas, 0, 0);
-
-            if (showGrid) {
-                drawGrid();
-            }
-        };
-
-        window.addEventListener('resize', resize);
-        resize();
-
-        socket.on("on draw", ({ data }) => {
-            draw(data.prevPos, data.currPos, data.color, data.lineWidth, false);
-        });
-
-        socket.on("clear canvas", () => {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            if (showGrid) {
-                drawGrid();
-            }
-        });
-
-        return () => {
-            window.removeEventListener('resize', resize);
-            socket.off("on draw");
-            socket.off("clear canvas");
-        };
-    }, [socket, roomId, showGrid]);
-
+        if (!canvas || !roomId) return;
+        try {
+            localStorage.setItem(`dobby_room_${roomId}_wb_snapshot`, canvas.toDataURL('image/png'));
+        } catch {
+            // Ignore quota/storage errors.
+        }
+    };
     const drawGrid = () => {
         const canvas = canvasRef.current;
         const ctx = canvas.getContext('2d');
@@ -109,6 +76,79 @@ const Whiteboard = ({ socket, roomId }) => {
         }
     };
 
+
+    const colorPresets = [
+        { color: "#3b82f6", name: "Blue" },
+        { color: "#8b5cf6", name: "Purple" },
+        { color: "#ec4899", name: "Pink" },
+        { color: "#10b981", name: "Green" },
+        { color: "#f59e0b", name: "Orange" },
+        { color: "#ef4444", name: "Red" },
+        { color: "#000000", name: "Black" },
+        { color: "#ffffff", name: "White" },
+    ];
+
+    useEffect(() => {
+        if (!socket) return;
+
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+
+        const resize = () => {
+            const parent = canvas.parentElement;
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+            tempCtx.drawImage(canvas, 0, 0);
+
+            canvas.width = parent.clientWidth;
+            canvas.height = parent.clientHeight;
+
+            ctx.drawImage(tempCanvas, 0, 0);
+
+            if (showGrid) {
+                drawGrid();
+            }
+
+            if (!hasRestoredSnapshotRef.current && roomId) {
+                const snapshot = localStorage.getItem(`dobby_room_${roomId}_wb_snapshot`);
+                if (snapshot) {
+                    const img = new Image();
+                    img.onload = () => {
+                        ctx.drawImage(img, 0, 0);
+                        if (showGrid) drawGrid();
+                    };
+                    img.src = snapshot;
+                }
+                hasRestoredSnapshotRef.current = true;
+            }
+        };
+
+        window.addEventListener('resize', resize);
+        resize();
+
+        socket.on("on draw", ({ data }) => {
+            draw(data.prevPos, data.currPos, data.color, data.lineWidth, false);
+        });
+
+        socket.on("clear canvas", () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (showGrid) {
+                drawGrid();
+            }
+            persistSnapshot();
+        });
+
+        return () => {
+            window.removeEventListener('resize', resize);
+            socket.off("on draw");
+            socket.off("clear canvas");
+        };
+    }, [socket, roomId, showGrid]);
+
+
+
     const handleMouseDown = (e) => {
         const { offsetX, offsetY } = e.nativeEvent;
         setIsDrawing(true);
@@ -127,6 +167,7 @@ const Whiteboard = ({ socket, roomId }) => {
 
     const handleMouseUp = () => {
         setIsDrawing(false);
+        persistSnapshot();
     };
 
     const clearBoard = () => {
@@ -137,17 +178,37 @@ const Whiteboard = ({ socket, roomId }) => {
             drawGrid();
         }
         socket.emit("clear canvas", { roomId });
+        persistSnapshot();
     };
 
     const toggleGrid = () => {
         const newShowGrid = !showGrid;
         setShowGrid(newShowGrid);
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d');
         if (newShowGrid) {
             drawGrid();
         }
+        persistSnapshot();
     };
+
+    useEffect(() => {
+        if (!roomId) return;
+        localStorage.setItem(`dobby_room_${roomId}_wb_color`, color);
+    }, [roomId, color]);
+
+    useEffect(() => {
+        if (!roomId) return;
+        localStorage.setItem(`dobby_room_${roomId}_wb_line_width`, String(lineWidth));
+    }, [roomId, lineWidth]);
+
+    useEffect(() => {
+        if (!roomId) return;
+        localStorage.setItem(`dobby_room_${roomId}_wb_tool`, tool);
+    }, [roomId, tool]);
+
+    useEffect(() => {
+        if (!roomId) return;
+        localStorage.setItem(`dobby_room_${roomId}_wb_show_grid`, showGrid ? 'true' : 'false');
+    }, [roomId, showGrid]);
 
     return (
         <div className="flex flex-col h-full bg-white relative font-mono">
